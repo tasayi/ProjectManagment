@@ -177,7 +177,7 @@ export class ProjectStore {
                 new Task({ name: '3D Enclosure CAD Design', stage: 'EVT', workstream: 'ME', assignedTo: 'Marcus Vance', duration: 8, predecessors: '4SS+2d', status: 'In Design', progress: 60 }),
                 new Task({ name: 'SLA 3D Prototype Printing', stage: 'EVT', workstream: 'ME', assignedTo: 'Marcus Vance', duration: 3, predecessors: '7FS', status: 'Not Started' }),
                 new Task({ name: 'Firmware Board Support Package (BSP)', stage: 'EVT', workstream: 'FW', assignedTo: 'Sarah Chen', duration: 10, predecessors: '4SS+3d', status: 'In Design', progress: 50 }),
-                new Task({ name: 'EVT 1st Article Assembly & Bring-Up', stage: 'EVT', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 4, predecessors: '6FS, 8FS, 9FS', status: 'Not Started' }),
+                new Task({ name: 'EVT 1st Article Assembly & Bring-Up', stage: 'EVT', workstream: 'HW', assignedResources: [{ name: 'Priya Sharma', units: 100 }, { name: 'Alex Rivera', units: 50 }], duration: 4, predecessors: '6FS, 8FS, 9FS', status: 'Not Started' }),
                 new Task({ name: 'EVT Milestone Gate Passed', stage: 'EVT', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 0, isMilestone: true, predecessors: '10FS', status: 'Not Started' }),
 
                 // DVT Phase

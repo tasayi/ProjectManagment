@@ -332,7 +332,7 @@ export class GanttView {
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
-                    ${this.escapeHtml(task.name)} ${task.assignedTo ? `(${task.assignedTo})` : ''}
+                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''}
                 </span>
 
                 ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `

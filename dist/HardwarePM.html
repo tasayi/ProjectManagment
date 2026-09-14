@@ -254,7 +254,21 @@ class Task {
         // Vendor & Procurement
         this.leadTime = data.leadTime || 0; // Component / Fab lead time in days
         this.vendor = data.vendor || '';
-        this.assignedTo = data.assignedTo || '';
+        
+        // Multi-Engineer & Fractional Resource Assignments: [{ name: 'Alex Rivera', units: 100 }, { name: 'Sarah Chen', units: 50 }]
+        if (Array.isArray(data.assignedResources)) {
+            this.assignedResources = data.assignedResources.map(r => ({
+                name: r.name,
+                units: typeof r.units === 'number' ? r.units : 100
+            }));
+        } else if (data.assignedTo && typeof data.assignedTo === 'string') {
+            this.assignedResources = [{ name: data.assignedTo, units: 100 }];
+        } else {
+            this.assignedResources = [];
+        }
+
+        // Legacy string getter fallback
+        this.assignedTo = data.assignedTo || (this.assignedResources.length > 0 ? this.assignedResources[0].name : '');
         this.notes = data.notes || '';
 
         // Baseline Snapshot Data
@@ -288,6 +302,28 @@ class Task {
         }
         return date.toISOString().split('T')[0];
     }
+
+    /**
+     * Get array of assigned resources
+     */
+    getAssignedResources() {
+        if (Array.isArray(this.assignedResources) && this.assignedResources.length > 0) {
+            return this.assignedResources;
+        }
+        if (this.assignedTo) {
+            return [{ name: this.assignedTo, units: 100 }];
+        }
+        return [];
+    }
+
+    /**
+     * Format assigned engineers string for labels
+     */
+    getFormattedAssignments() {
+        const list = this.getAssignedResources();
+        if (list.length === 0) return 'Unassigned';
+        return list.map(r => `${r.name} (${r.units || 100}%)`).join(', ');
+    }
 }
 
 // Built-in Workstream Disciplines (including predefined SYS)
@@ -316,9 +352,6 @@ const STATUS_PILLS = {
     'Complete': { label: 'Complete', class: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
 };
 
-/**
- * Register Custom User-Defined Workstream
- */
 function registerCustomWorkstream(code, name, color = '#6366f1', bg = '#e0e7ff') {
     const safeCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!WORKSTREAMS[safeCode]) {
@@ -327,9 +360,6 @@ function registerCustomWorkstream(code, name, color = '#6366f1', bg = '#e0e7ff')
     return safeCode;
 }
 
-/**
- * Register Custom User-Defined Stage
- */
 function registerCustomStage(stageName) {
     const trimmed = stageName.trim();
     if (trimmed && !HARDWARE_STAGES.includes(trimmed)) {
@@ -338,9 +368,6 @@ function registerCustomStage(stageName) {
     return trimmed;
 }
 
-/**
- * Register Custom User-Defined Status
- */
 function registerCustomStatus(statusName) {
     const trimmed = statusName.trim();
     if (trimmed && !STATUS_PILLS[trimmed]) {
@@ -883,7 +910,7 @@ class BaselineEngine {
 
 // --- Module: js/views/wbsGridView.js ---
 /**
- * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing, Status Pills & Custom Options
+ * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Multi-Engineer Assignments & Fractional Day Units
  */
 
 
@@ -958,7 +985,7 @@ class WbsGridView {
                                 <th class="py-2 px-3 min-w-[180px] border-r border-slate-200">Activity Name</th>
                                 ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Stream</th>' : ''}
                                 ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-16 border-r border-slate-200">Stage</th>' : ''}
-                                ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Assigned Engineer</th>' : ''}
+                                ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 min-w-[140px] border-r border-slate-200">Assigned Engineers</th>' : ''}
                                 ${this.visibleColumns.status ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Status</th>' : ''}
                                 ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
                                 ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Procurement Lead Time">Lead (d)</th>' : ''}
@@ -974,6 +1001,9 @@ class WbsGridView {
                     </table>
                 </div>
             </div>
+
+            <!-- Resource Assignment Popover Container -->
+            <div id="assignment-popover-container"></div>
         `;
 
         this.container.innerHTML = html;
@@ -1009,6 +1039,8 @@ class WbsGridView {
             const indentLevel = (t.wbs.split('.').length - 1) * 14;
             const wsInfo = WORKSTREAMS[t.workstream] || { name: t.workstream, color: '#6366f1', bg: '#e0e7ff' };
             const statusInfo = STATUS_PILLS[t.status] || { label: t.status, class: 'bg-indigo-100 text-indigo-800 border-indigo-300' };
+
+            const assignments = t.getAssignedResources();
 
             return `
                 <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
@@ -1058,15 +1090,19 @@ class WbsGridView {
                         </td>
                     ` : ''}
 
-                    <!-- Assigned Engineer -->
+                    <!-- Multi-Engineer Assigned Badge Cell -->
                     ${this.visibleColumns.assignedTo ? `
-                        <td class="py-1 px-1 border-r border-slate-200">
-                            <select data-field="assignedTo" data-id="${t.id}" class="w-full text-[11px] font-medium border border-slate-200 rounded px-1 py-0.5 focus:outline-none bg-white">
-                                <option value="">-- Unassigned --</option>
-                                ${this.resources.map(r => `
-                                    <option value="${r.name}" ${t.assignedTo === r.name ? 'selected' : ''}>${r.name}</option>
+                        <td class="py-1 px-1 border-r border-slate-200 cursor-pointer hover:bg-indigo-50/50 transition-colors" data-action="open-assignment-modal" data-id="${t.id}">
+                            <div class="flex items-center gap-1 flex-wrap">
+                                ${assignments.length === 0 ? `
+                                    <span class="text-slate-400 italic text-[10px] px-1">+ Assign Engineers</span>
+                                ` : assignments.map(a => `
+                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-900 border border-indigo-200 rounded text-[10px] font-medium">
+                                        <span>${this.escapeHtml(a.name)}</span>
+                                        <span class="font-mono text-[9px] font-bold text-indigo-700">(${a.units || 100}%)</span>
+                                    </span>
                                 `).join('')}
-                            </select>
+                            </div>
                         </td>
                     ` : ''}
 
@@ -1155,6 +1191,15 @@ class WbsGridView {
             });
         });
 
+        // Open Multi-Engineer Assignment Modal
+        this.container.querySelectorAll('[data-action="open-assignment-modal"]').forEach(cell => {
+            cell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = cell.getAttribute('data-id');
+                this.openAssignmentModal(id);
+            });
+        });
+
         // Input change handlers with Custom Option Prompts
         this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
             element.addEventListener('change', (e) => {
@@ -1224,6 +1269,92 @@ class WbsGridView {
         }
     }
 
+    openAssignmentModal(taskId) {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const popoverContainer = this.container.querySelector('#assignment-popover-container');
+        if (!popoverContainer) return;
+
+        const currentAssignments = task.getAssignedResources();
+        const currentMap = new Map(currentAssignments.map(a => [a.name, a.units || 100]));
+
+        const html = `
+            <div id="assignment-modal-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
+                    <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+                        <div class="font-bold text-xs flex items-center gap-1.5">
+                            <span>👥 Resource Assignment & Fractional Units</span>
+                        </div>
+                        <button id="assign-modal-close" class="text-slate-400 hover:text-white font-bold">✕</button>
+                    </div>
+
+                    <div class="p-4 space-y-3 text-xs">
+                        <p class="text-slate-500 text-[11px]">Select engineers and assign fractional day units for task <strong class="text-slate-800 font-semibold">"${this.escapeHtml(task.name)}"</strong>:</p>
+
+                        <div class="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded p-2 bg-slate-50">
+                            ${this.resources.length === 0 ? `
+                                <div class="text-slate-400 italic text-center p-2">No engineers in team pool. Add engineers in Engineer Workload tab.</div>
+                            ` : this.resources.map(res => {
+                                const isAssigned = currentMap.has(res.name);
+                                const currentUnits = currentMap.get(res.name) || 100;
+                                return `
+                                    <div class="flex items-center justify-between p-1.5 bg-white rounded border border-slate-200">
+                                        <label class="flex items-center gap-2 cursor-pointer font-medium text-slate-800">
+                                            <input type="checkbox" data-res-name="${this.escapeHtml(res.name)}" ${isAssigned ? 'checked' : ''} class="assign-checkbox rounded text-indigo-600 focus:ring-indigo-500">
+                                            <span>${this.escapeHtml(res.name)} <span class="text-slate-400 text-[10px]">(${res.role})</span></span>
+                                        </label>
+                                        <div class="flex items-center gap-1">
+                                            <span class="text-[10px] text-slate-400">Load:</span>
+                                            <select data-res-units="${this.escapeHtml(res.name)}" class="assign-units-select text-[11px] font-bold border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none">
+                                                <option value="100" ${currentUnits === 100 ? 'selected' : ''}>100% (8h/d)</option>
+                                                <option value="75" ${currentUnits === 75 ? 'selected' : ''}>75% (6h/d)</option>
+                                                <option value="50" ${currentUnits === 50 ? 'selected' : ''}>50% (4h/d)</option>
+                                                <option value="25" ${currentUnits === 25 ? 'selected' : ''}>25% (2h/d)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    <div class="px-4 py-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                        <button id="assign-modal-cancel" class="px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs">Cancel</button>
+                        <button id="assign-modal-save" class="px-4 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs shadow">Save Assignments</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        popoverContainer.innerHTML = html;
+
+        const closeModal = () => { popoverContainer.innerHTML = ''; };
+
+        popoverContainer.querySelector('#assign-modal-close').onclick = closeModal;
+        popoverContainer.querySelector('#assign-modal-cancel').onclick = closeModal;
+
+        popoverContainer.querySelector('#assign-modal-save').onclick = () => {
+            const newAssignments = [];
+            popoverContainer.querySelectorAll('.assign-checkbox').forEach(cb => {
+                if (cb.checked) {
+                    const name = cb.getAttribute('data-res-name');
+                    const unitsSelect = popoverContainer.querySelector(`[data-res-units="${CSS.escape(name)}"]`);
+                    const units = unitsSelect ? parseInt(unitsSelect.value, 10) : 100;
+                    newAssignments.push({ name, units });
+                }
+            });
+
+            task.assignedResources = newAssignments;
+            task.assignedTo = newAssignments.length > 0 ? newAssignments[0].name : '';
+
+            if (this.onTaskChange) {
+                this.onTaskChange(task.id, 'assignedResources', newAssignments);
+            }
+            closeModal();
+        };
+    }
+
     selectTask(taskId) {
         this.selectedTaskId = taskId;
         this.container.querySelectorAll('.wbs-row').forEach(r => {
@@ -1257,7 +1388,7 @@ class WbsGridView {
         const filtered = this.tasks.filter(t => 
             t.name.toLowerCase().includes(query) ||
             t.wbs.includes(query) ||
-            (t.assignedTo || '').toLowerCase().includes(query) ||
+            t.getFormattedAssignments().toLowerCase().includes(query) ||
             t.workstream.toLowerCase().includes(query) ||
             t.stage.toLowerCase().includes(query)
         );
@@ -1607,7 +1738,7 @@ class GanttView {
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
-                    ${this.escapeHtml(task.name)} ${task.assignedTo ? `(${task.assignedTo})` : ''}
+                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''}
                 </span>
 
                 ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `
@@ -1896,7 +2027,7 @@ class MilestonesView {
 
 // --- Module: js/views/resourceView.js ---
 /**
- * Resource View: Engineer Pool Management & Workload Allocation Heatmap Inspector
+ * Resource View: Engineer Pool Management & Fractional Workload Allocation Heatmap Inspector
  */
 
 
@@ -1923,7 +2054,7 @@ class ResourceView {
                             <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                             Team Engineers & Workload Allocation Heatmap
                         </h2>
-                        <p class="text-xs text-slate-500">Manage engineer assignments and inspect daily capacity loading to spot over-allocation bottlenecks.</p>
+                        <p class="text-xs text-slate-500">Manage engineer assignments and inspect daily fractional capacity loading to spot over-allocation bottlenecks.</p>
                     </div>
                     <button id="btn-add-engineer" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold text-xs shadow transition flex items-center gap-1">
                         + Add Engineer
@@ -1970,13 +2101,13 @@ class ResourceView {
                         </div>
                     </div>
 
-                    <!-- Right: Workload Heatmap Matrix (Spans 2 columns) -->
+                    <!-- Right: Fractional Workload Heatmap Matrix -->
                     <div class="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col overflow-hidden">
                         <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center">
-                            <span>Engineer Daily Workload Heatmap (% Loading)</span>
+                            <span>Engineer Daily Workload Heatmap (% Fractional Loading)</span>
                             <div class="flex items-center gap-2 text-[10px]">
                                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-200 rounded"></span> ≤100% Normal</span>
-                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-400 rounded"></span> >100% Over-Allocated</span>
+                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-500 rounded"></span> >100% Over-Allocated</span>
                             </div>
                         </div>
                         <div class="flex-1 overflow-auto">
@@ -1992,7 +2123,6 @@ class ResourceView {
     }
 
     renderHeatmapMatrix(resources, tasks) {
-        // Build 21-day timeline matrix
         const dates = [];
         let curr = new Date();
         curr.setDate(curr.getDate() - 2);
@@ -2002,24 +2132,30 @@ class ResourceView {
             curr.setDate(curr.getDate() + 1);
         }
 
-        // Map workload per resource per date
-        const workloadMap = new Map(); // key: resourceId_date -> total % loading
+        // Map fractional workload per resource per date: resourceId_date -> sum of allocation units %
+        const workloadMap = new Map();
 
         tasks.forEach(task => {
-            if (!task.assignedTo || !task.start || !task.finish) return;
-            const res = resources.find(r => r.name === task.assignedTo || r.id === task.assignedTo);
-            if (!res) return;
+            if (!task.start || !task.finish) return;
+            const assigned = task.getAssignedResources();
+            if (assigned.length === 0) return;
 
-            let d = new Date(task.start);
-            const finishDate = new Date(task.finish);
+            assigned.forEach(a => {
+                const res = resources.find(r => r.name === a.name || r.id === a.name);
+                if (!res) return;
 
-            while (d <= finishDate) {
-                const dateStr = d.toISOString().split('T')[0];
-                const key = `${res.id}_${dateStr}`;
-                const currentLoad = workloadMap.get(key) || 0;
-                workloadMap.set(key, currentLoad + 100); // 100% capacity per assigned task
-                d.setDate(d.getDate() + 1);
-            }
+                const units = typeof a.units === 'number' ? a.units : 100;
+                let d = new Date(task.start);
+                const finishDate = new Date(task.finish);
+
+                while (d <= finishDate) {
+                    const dateStr = d.toISOString().split('T')[0];
+                    const key = `${res.id}_${dateStr}`;
+                    const currentLoad = workloadMap.get(key) || 0;
+                    workloadMap.set(key, currentLoad + units);
+                    d.setDate(d.getDate() + 1);
+                }
+            });
         });
 
         return `
@@ -2053,7 +2189,7 @@ class ResourceView {
                                 }
 
                                 return `
-                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} text-[10px]" title="${res.name}: ${load}% on ${d}">
+                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} text-[10px]" title="${res.name}: ${load}% total allocation on ${d}">
                                         ${load > 0 ? `${load}%` : '-'}
                                     </td>
                                 `;
@@ -2068,7 +2204,6 @@ class ResourceView {
     attachEventListeners() {
         if (!this.container) return;
 
-        // Add Engineer button
         const addBtn = this.container.querySelector('#btn-add-engineer');
         if (addBtn) {
             addBtn.onclick = () => {
@@ -2087,7 +2222,6 @@ class ResourceView {
             };
         }
 
-        // Delete Resource button
         this.container.querySelectorAll('[data-action="delete-resource"]').forEach(btn => {
             btn.onclick = () => {
                 const id = btn.getAttribute('data-id');
@@ -2102,7 +2236,6 @@ class ResourceView {
         return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 }
-
 
 
 // --- Module: js/views/calendarModalView.js ---
@@ -2485,8 +2618,8 @@ class DependencyTreeView {
 
                 <!-- Engineer & Predecessors -->
                 <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-100 flex items-center justify-between">
-                    <span class="font-medium text-slate-700 truncate" title="Assigned: ${task.assignedTo || 'Unassigned'}">
-                        👤 ${task.assignedTo || 'Unassigned'}
+                    <span class="font-medium text-slate-700 truncate" title="Assigned: ${this.escapeHtml(task.getFormattedAssignments())}">
+                        👤 ${this.escapeHtml(task.getFormattedAssignments())}
                     </span>
                     ${predBadges ? `
                         <span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded font-mono font-bold text-[9px]" title="Predecessors: ${predBadges}">
@@ -2862,7 +2995,7 @@ class ProjectStore {
                 new Task({ name: '3D Enclosure CAD Design', stage: 'EVT', workstream: 'ME', assignedTo: 'Marcus Vance', duration: 8, predecessors: '4SS+2d', status: 'In Design', progress: 60 }),
                 new Task({ name: 'SLA 3D Prototype Printing', stage: 'EVT', workstream: 'ME', assignedTo: 'Marcus Vance', duration: 3, predecessors: '7FS', status: 'Not Started' }),
                 new Task({ name: 'Firmware Board Support Package (BSP)', stage: 'EVT', workstream: 'FW', assignedTo: 'Sarah Chen', duration: 10, predecessors: '4SS+3d', status: 'In Design', progress: 50 }),
-                new Task({ name: 'EVT 1st Article Assembly & Bring-Up', stage: 'EVT', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 4, predecessors: '6FS, 8FS, 9FS', status: 'Not Started' }),
+                new Task({ name: 'EVT 1st Article Assembly & Bring-Up', stage: 'EVT', workstream: 'HW', assignedResources: [{ name: 'Priya Sharma', units: 100 }, { name: 'Alex Rivera', units: 50 }], duration: 4, predecessors: '6FS, 8FS, 9FS', status: 'Not Started' }),
                 new Task({ name: 'EVT Milestone Gate Passed', stage: 'EVT', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 0, isMilestone: true, predecessors: '10FS', status: 'Not Started' }),
 
                 // DVT Phase
@@ -2929,7 +3062,7 @@ class ExcelExporter {
             'Activity Name': t.name,
             'Workstream': t.workstream,
             'Hardware Stage': t.stage,
-            'Assigned Engineer': t.assignedTo || 'Unassigned',
+            'Assigned Engineers': t.getFormattedAssignments(),
             'Status': t.status,
             'Duration (Days)': t.duration,
             'Start Date': t.start,

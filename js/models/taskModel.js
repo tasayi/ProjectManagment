@@ -25,7 +25,21 @@ export class Task {
         // Vendor & Procurement
         this.leadTime = data.leadTime || 0; // Component / Fab lead time in days
         this.vendor = data.vendor || '';
-        this.assignedTo = data.assignedTo || '';
+        
+        // Multi-Engineer & Fractional Resource Assignments: [{ name: 'Alex Rivera', units: 100 }, { name: 'Sarah Chen', units: 50 }]
+        if (Array.isArray(data.assignedResources)) {
+            this.assignedResources = data.assignedResources.map(r => ({
+                name: r.name,
+                units: typeof r.units === 'number' ? r.units : 100
+            }));
+        } else if (data.assignedTo && typeof data.assignedTo === 'string') {
+            this.assignedResources = [{ name: data.assignedTo, units: 100 }];
+        } else {
+            this.assignedResources = [];
+        }
+
+        // Legacy string getter fallback
+        this.assignedTo = data.assignedTo || (this.assignedResources.length > 0 ? this.assignedResources[0].name : '');
         this.notes = data.notes || '';
 
         // Baseline Snapshot Data
@@ -59,6 +73,28 @@ export class Task {
         }
         return date.toISOString().split('T')[0];
     }
+
+    /**
+     * Get array of assigned resources
+     */
+    getAssignedResources() {
+        if (Array.isArray(this.assignedResources) && this.assignedResources.length > 0) {
+            return this.assignedResources;
+        }
+        if (this.assignedTo) {
+            return [{ name: this.assignedTo, units: 100 }];
+        }
+        return [];
+    }
+
+    /**
+     * Format assigned engineers string for labels
+     */
+    getFormattedAssignments() {
+        const list = this.getAssignedResources();
+        if (list.length === 0) return 'Unassigned';
+        return list.map(r => `${r.name} (${r.units || 100}%)`).join(', ');
+    }
 }
 
 // Built-in Workstream Disciplines (including predefined SYS)
@@ -87,9 +123,6 @@ export const STATUS_PILLS = {
     'Complete': { label: 'Complete', class: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
 };
 
-/**
- * Register Custom User-Defined Workstream
- */
 export function registerCustomWorkstream(code, name, color = '#6366f1', bg = '#e0e7ff') {
     const safeCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!WORKSTREAMS[safeCode]) {
@@ -98,9 +131,6 @@ export function registerCustomWorkstream(code, name, color = '#6366f1', bg = '#e
     return safeCode;
 }
 
-/**
- * Register Custom User-Defined Stage
- */
 export function registerCustomStage(stageName) {
     const trimmed = stageName.trim();
     if (trimmed && !HARDWARE_STAGES.includes(trimmed)) {
@@ -109,9 +139,6 @@ export function registerCustomStage(stageName) {
     return trimmed;
 }
 
-/**
- * Register Custom User-Defined Status
- */
 export function registerCustomStatus(statusName) {
     const trimmed = statusName.trim();
     if (trimmed && !STATUS_PILLS[trimmed]) {

@@ -21,7 +21,7 @@ export class ExcelExporter {
             'Activity Name': t.name,
             'Workstream': t.workstream,
             'Hardware Stage': t.stage,
-            'Assigned Engineer': t.assignedTo || 'Unassigned',
+            'Assigned Engineers': t.getFormattedAssignments(),
             'Status': t.status,
             'Duration (Days)': t.duration,
             'Start Date': t.start,

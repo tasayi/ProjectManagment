@@ -1,5 +1,5 @@
 /**
- * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing, Status Pills & Custom Options
+ * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Multi-Engineer Assignments & Fractional Day Units
  */
 
 import { WORKSTREAMS, HARDWARE_STAGES, STATUS_PILLS, registerCustomWorkstream, registerCustomStage, registerCustomStatus } from '../models/taskModel.js';
@@ -74,7 +74,7 @@ export class WbsGridView {
                                 <th class="py-2 px-3 min-w-[180px] border-r border-slate-200">Activity Name</th>
                                 ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Stream</th>' : ''}
                                 ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-16 border-r border-slate-200">Stage</th>' : ''}
-                                ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Assigned Engineer</th>' : ''}
+                                ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 min-w-[140px] border-r border-slate-200">Assigned Engineers</th>' : ''}
                                 ${this.visibleColumns.status ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Status</th>' : ''}
                                 ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
                                 ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Procurement Lead Time">Lead (d)</th>' : ''}
@@ -90,6 +90,9 @@ export class WbsGridView {
                     </table>
                 </div>
             </div>
+
+            <!-- Resource Assignment Popover Container -->
+            <div id="assignment-popover-container"></div>
         `;
 
         this.container.innerHTML = html;
@@ -125,6 +128,8 @@ export class WbsGridView {
             const indentLevel = (t.wbs.split('.').length - 1) * 14;
             const wsInfo = WORKSTREAMS[t.workstream] || { name: t.workstream, color: '#6366f1', bg: '#e0e7ff' };
             const statusInfo = STATUS_PILLS[t.status] || { label: t.status, class: 'bg-indigo-100 text-indigo-800 border-indigo-300' };
+
+            const assignments = t.getAssignedResources();
 
             return `
                 <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
@@ -174,15 +179,19 @@ export class WbsGridView {
                         </td>
                     ` : ''}
 
-                    <!-- Assigned Engineer -->
+                    <!-- Multi-Engineer Assigned Badge Cell -->
                     ${this.visibleColumns.assignedTo ? `
-                        <td class="py-1 px-1 border-r border-slate-200">
-                            <select data-field="assignedTo" data-id="${t.id}" class="w-full text-[11px] font-medium border border-slate-200 rounded px-1 py-0.5 focus:outline-none bg-white">
-                                <option value="">-- Unassigned --</option>
-                                ${this.resources.map(r => `
-                                    <option value="${r.name}" ${t.assignedTo === r.name ? 'selected' : ''}>${r.name}</option>
+                        <td class="py-1 px-1 border-r border-slate-200 cursor-pointer hover:bg-indigo-50/50 transition-colors" data-action="open-assignment-modal" data-id="${t.id}">
+                            <div class="flex items-center gap-1 flex-wrap">
+                                ${assignments.length === 0 ? `
+                                    <span class="text-slate-400 italic text-[10px] px-1">+ Assign Engineers</span>
+                                ` : assignments.map(a => `
+                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-900 border border-indigo-200 rounded text-[10px] font-medium">
+                                        <span>${this.escapeHtml(a.name)}</span>
+                                        <span class="font-mono text-[9px] font-bold text-indigo-700">(${a.units || 100}%)</span>
+                                    </span>
                                 `).join('')}
-                            </select>
+                            </div>
                         </td>
                     ` : ''}
 
@@ -271,6 +280,15 @@ export class WbsGridView {
             });
         });
 
+        // Open Multi-Engineer Assignment Modal
+        this.container.querySelectorAll('[data-action="open-assignment-modal"]').forEach(cell => {
+            cell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = cell.getAttribute('data-id');
+                this.openAssignmentModal(id);
+            });
+        });
+
         // Input change handlers with Custom Option Prompts
         this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
             element.addEventListener('change', (e) => {
@@ -340,6 +358,92 @@ export class WbsGridView {
         }
     }
 
+    openAssignmentModal(taskId) {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        const popoverContainer = this.container.querySelector('#assignment-popover-container');
+        if (!popoverContainer) return;
+
+        const currentAssignments = task.getAssignedResources();
+        const currentMap = new Map(currentAssignments.map(a => [a.name, a.units || 100]));
+
+        const html = `
+            <div id="assignment-modal-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
+                    <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+                        <div class="font-bold text-xs flex items-center gap-1.5">
+                            <span>👥 Resource Assignment & Fractional Units</span>
+                        </div>
+                        <button id="assign-modal-close" class="text-slate-400 hover:text-white font-bold">✕</button>
+                    </div>
+
+                    <div class="p-4 space-y-3 text-xs">
+                        <p class="text-slate-500 text-[11px]">Select engineers and assign fractional day units for task <strong class="text-slate-800 font-semibold">"${this.escapeHtml(task.name)}"</strong>:</p>
+
+                        <div class="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded p-2 bg-slate-50">
+                            ${this.resources.length === 0 ? `
+                                <div class="text-slate-400 italic text-center p-2">No engineers in team pool. Add engineers in Engineer Workload tab.</div>
+                            ` : this.resources.map(res => {
+                                const isAssigned = currentMap.has(res.name);
+                                const currentUnits = currentMap.get(res.name) || 100;
+                                return `
+                                    <div class="flex items-center justify-between p-1.5 bg-white rounded border border-slate-200">
+                                        <label class="flex items-center gap-2 cursor-pointer font-medium text-slate-800">
+                                            <input type="checkbox" data-res-name="${this.escapeHtml(res.name)}" ${isAssigned ? 'checked' : ''} class="assign-checkbox rounded text-indigo-600 focus:ring-indigo-500">
+                                            <span>${this.escapeHtml(res.name)} <span class="text-slate-400 text-[10px]">(${res.role})</span></span>
+                                        </label>
+                                        <div class="flex items-center gap-1">
+                                            <span class="text-[10px] text-slate-400">Load:</span>
+                                            <select data-res-units="${this.escapeHtml(res.name)}" class="assign-units-select text-[11px] font-bold border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none">
+                                                <option value="100" ${currentUnits === 100 ? 'selected' : ''}>100% (8h/d)</option>
+                                                <option value="75" ${currentUnits === 75 ? 'selected' : ''}>75% (6h/d)</option>
+                                                <option value="50" ${currentUnits === 50 ? 'selected' : ''}>50% (4h/d)</option>
+                                                <option value="25" ${currentUnits === 25 ? 'selected' : ''}>25% (2h/d)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    <div class="px-4 py-2.5 bg-slate-100 border-t border-slate-200 flex justify-end gap-2">
+                        <button id="assign-modal-cancel" class="px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs">Cancel</button>
+                        <button id="assign-modal-save" class="px-4 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs shadow">Save Assignments</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        popoverContainer.innerHTML = html;
+
+        const closeModal = () => { popoverContainer.innerHTML = ''; };
+
+        popoverContainer.querySelector('#assign-modal-close').onclick = closeModal;
+        popoverContainer.querySelector('#assign-modal-cancel').onclick = closeModal;
+
+        popoverContainer.querySelector('#assign-modal-save').onclick = () => {
+            const newAssignments = [];
+            popoverContainer.querySelectorAll('.assign-checkbox').forEach(cb => {
+                if (cb.checked) {
+                    const name = cb.getAttribute('data-res-name');
+                    const unitsSelect = popoverContainer.querySelector(`[data-res-units="${CSS.escape(name)}"]`);
+                    const units = unitsSelect ? parseInt(unitsSelect.value, 10) : 100;
+                    newAssignments.push({ name, units });
+                }
+            });
+
+            task.assignedResources = newAssignments;
+            task.assignedTo = newAssignments.length > 0 ? newAssignments[0].name : '';
+
+            if (this.onTaskChange) {
+                this.onTaskChange(task.id, 'assignedResources', newAssignments);
+            }
+            closeModal();
+        };
+    }
+
     selectTask(taskId) {
         this.selectedTaskId = taskId;
         this.container.querySelectorAll('.wbs-row').forEach(r => {
@@ -373,7 +477,7 @@ export class WbsGridView {
         const filtered = this.tasks.filter(t => 
             t.name.toLowerCase().includes(query) ||
             t.wbs.includes(query) ||
-            (t.assignedTo || '').toLowerCase().includes(query) ||
+            t.getFormattedAssignments().toLowerCase().includes(query) ||
             t.workstream.toLowerCase().includes(query) ||
             t.stage.toLowerCase().includes(query)
         );

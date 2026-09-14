@@ -1,5 +1,5 @@
 /**
- * Resource View: Engineer Pool Management & Workload Allocation Heatmap Inspector
+ * Resource View: Engineer Pool Management & Fractional Workload Allocation Heatmap Inspector
  */
 
 import { WORKSTREAMS } from '../models/taskModel.js';
@@ -26,7 +26,7 @@ export class ResourceView {
                             <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                             Team Engineers & Workload Allocation Heatmap
                         </h2>
-                        <p class="text-xs text-slate-500">Manage engineer assignments and inspect daily capacity loading to spot over-allocation bottlenecks.</p>
+                        <p class="text-xs text-slate-500">Manage engineer assignments and inspect daily fractional capacity loading to spot over-allocation bottlenecks.</p>
                     </div>
                     <button id="btn-add-engineer" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold text-xs shadow transition flex items-center gap-1">
                         + Add Engineer
@@ -73,13 +73,13 @@ export class ResourceView {
                         </div>
                     </div>
 
-                    <!-- Right: Workload Heatmap Matrix (Spans 2 columns) -->
+                    <!-- Right: Fractional Workload Heatmap Matrix -->
                     <div class="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col overflow-hidden">
                         <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center">
-                            <span>Engineer Daily Workload Heatmap (% Loading)</span>
+                            <span>Engineer Daily Workload Heatmap (% Fractional Loading)</span>
                             <div class="flex items-center gap-2 text-[10px]">
                                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-200 rounded"></span> ≤100% Normal</span>
-                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-400 rounded"></span> >100% Over-Allocated</span>
+                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-500 rounded"></span> >100% Over-Allocated</span>
                             </div>
                         </div>
                         <div class="flex-1 overflow-auto">
@@ -95,7 +95,6 @@ export class ResourceView {
     }
 
     renderHeatmapMatrix(resources, tasks) {
-        // Build 21-day timeline matrix
         const dates = [];
         let curr = new Date();
         curr.setDate(curr.getDate() - 2);
@@ -105,24 +104,30 @@ export class ResourceView {
             curr.setDate(curr.getDate() + 1);
         }
 
-        // Map workload per resource per date
-        const workloadMap = new Map(); // key: resourceId_date -> total % loading
+        // Map fractional workload per resource per date: resourceId_date -> sum of allocation units %
+        const workloadMap = new Map();
 
         tasks.forEach(task => {
-            if (!task.assignedTo || !task.start || !task.finish) return;
-            const res = resources.find(r => r.name === task.assignedTo || r.id === task.assignedTo);
-            if (!res) return;
+            if (!task.start || !task.finish) return;
+            const assigned = task.getAssignedResources();
+            if (assigned.length === 0) return;
 
-            let d = new Date(task.start);
-            const finishDate = new Date(task.finish);
+            assigned.forEach(a => {
+                const res = resources.find(r => r.name === a.name || r.id === a.name);
+                if (!res) return;
 
-            while (d <= finishDate) {
-                const dateStr = d.toISOString().split('T')[0];
-                const key = `${res.id}_${dateStr}`;
-                const currentLoad = workloadMap.get(key) || 0;
-                workloadMap.set(key, currentLoad + 100); // 100% capacity per assigned task
-                d.setDate(d.getDate() + 1);
-            }
+                const units = typeof a.units === 'number' ? a.units : 100;
+                let d = new Date(task.start);
+                const finishDate = new Date(task.finish);
+
+                while (d <= finishDate) {
+                    const dateStr = d.toISOString().split('T')[0];
+                    const key = `${res.id}_${dateStr}`;
+                    const currentLoad = workloadMap.get(key) || 0;
+                    workloadMap.set(key, currentLoad + units);
+                    d.setDate(d.getDate() + 1);
+                }
+            });
         });
 
         return `
@@ -156,7 +161,7 @@ export class ResourceView {
                                 }
 
                                 return `
-                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} text-[10px]" title="${res.name}: ${load}% on ${d}">
+                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} text-[10px]" title="${res.name}: ${load}% total allocation on ${d}">
                                         ${load > 0 ? `${load}%` : '-'}
                                     </td>
                                 `;
@@ -171,7 +176,6 @@ export class ResourceView {
     attachEventListeners() {
         if (!this.container) return;
 
-        // Add Engineer button
         const addBtn = this.container.querySelector('#btn-add-engineer');
         if (addBtn) {
             addBtn.onclick = () => {
@@ -190,7 +194,6 @@ export class ResourceView {
             };
         }
 
-        // Delete Resource button
         this.container.querySelectorAll('[data-action="delete-resource"]').forEach(btn => {
             btn.onclick = () => {
                 const id = btn.getAttribute('data-id');
@@ -205,4 +208,3 @@ export class ResourceView {
         return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 }
-

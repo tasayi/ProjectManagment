@@ -121,8 +121,8 @@ export class DependencyTreeView {
 
                 <!-- Engineer & Predecessors -->
                 <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-100 flex items-center justify-between">
-                    <span class="font-medium text-slate-700 truncate" title="Assigned: ${task.assignedTo || 'Unassigned'}">
-                        👤 ${task.assignedTo || 'Unassigned'}
+                    <span class="font-medium text-slate-700 truncate" title="Assigned: ${this.escapeHtml(task.getFormattedAssignments())}">
+                        👤 ${this.escapeHtml(task.getFormattedAssignments())}
                     </span>
                     ${predBadges ? `
                         <span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded font-mono font-bold text-[9px]" title="Predecessors: ${predBadges}">
