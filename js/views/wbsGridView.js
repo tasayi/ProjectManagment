@@ -1,5 +1,5 @@
 /**
- * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing & Status Pills
+ * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing, Status Pills & Engineer Assignments
  */
 
 import { WORKSTREAMS, HARDWARE_STAGES, STATUS_PILLS } from '../models/taskModel.js';
@@ -11,23 +11,26 @@ export class WbsGridView {
         this.onTaskChange = onTaskChange; // Callback when data changes
         this.onTaskSelect = onTaskSelect; // Callback when row selected
         this.selectedTaskId = null;
+        this.resources = [];
         this.visibleColumns = {
             workstream: true,
             stage: true,
+            status: true,
+            assignedTo: true,
             duration: true,
             dates: true,
             predecessors: true,
-            status: true,
             leadTime: true,
-            vendor: false,
             variance: true
         };
     }
 
-    render(tasks) {
+    render(tasks, resources = []) {
         if (!this.container) return;
 
         this.tasks = tasks;
+        this.resources = resources;
+
         const html = `
             <div class="wbs-grid-container flex flex-col h-full bg-white border-r border-slate-200 overflow-hidden select-none">
                 <!-- Grid Header Toolbar -->
@@ -68,12 +71,13 @@ export class WbsGridView {
                         <thead class="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-slate-600 font-semibold uppercase tracking-wider">
                             <tr>
                                 <th class="py-2 px-2 w-12 text-center border-r border-slate-200">WBS</th>
-                                <th class="py-2 px-3 min-w-[200px] border-r border-slate-200">Activity Name</th>
-                                ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Workstream</th>' : ''}
-                                ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-20 border-r border-slate-200">Stage</th>' : ''}
-                                ${this.visibleColumns.status ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Status</th>' : ''}
+                                <th class="py-2 px-3 min-w-[180px] border-r border-slate-200">Activity Name</th>
+                                ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Stream</th>' : ''}
+                                ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-16 border-r border-slate-200">Stage</th>' : ''}
+                                ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Assigned Engineer</th>' : ''}
+                                ${this.visibleColumns.status ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Status</th>' : ''}
                                 ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
-                                ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-20 text-center border-r border-slate-200" title="Procurement / Fab Lead Time">Lead (d)</th>' : ''}
+                                ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Procurement Lead Time">Lead (d)</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Start</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Finish</th>' : ''}
                                 ${this.visibleColumns.predecessors ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Predecessors</th>' : ''}
@@ -94,10 +98,9 @@ export class WbsGridView {
 
     renderRows(tasks) {
         if (!tasks || tasks.length === 0) {
-            return `<tr><td colspan="10" class="p-6 text-center text-slate-400 italic">No tasks found. Click "Add Activity" to create one.</td></tr>`;
+            return `<tr><td colspan="12" class="p-6 text-center text-slate-400 italic">No tasks found. Click "Add Activity" to create one.</td></tr>`;
         }
 
-        // Determine visible tasks based on summary expand/collapse state
         const hiddenIds = new Set();
         const idMap = new Map(tasks.map(t => [t.id, t]));
 
@@ -119,7 +122,7 @@ export class WbsGridView {
 
             const isSelected = t.id === this.selectedTaskId;
             const variance = BaselineEngine.getVariance(t);
-            const indentLevel = (t.wbs.split('.').length - 1) * 16; // 16px per indent level
+            const indentLevel = (t.wbs.split('.').length - 1) * 14;
             const wsInfo = WORKSTREAMS[t.workstream] || WORKSTREAMS['HW'];
             const statusInfo = STATUS_PILLS[t.status] || STATUS_PILLS['Not Started'];
 
@@ -130,7 +133,7 @@ export class WbsGridView {
                         ${t.wbs}
                     </td>
 
-                    <!-- Activity Name + Tree Control -->
+                    <!-- Activity Name -->
                     <td class="py-1 px-2 border-r border-slate-200 overflow-hidden">
                         <div class="flex items-center gap-1" style="padding-left: ${indentLevel}px;">
                             ${t.isSummary ? `
@@ -150,9 +153,9 @@ export class WbsGridView {
                     <!-- Workstream -->
                     ${this.visibleColumns.workstream ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <select data-field="workstream" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1.5 py-0.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500" style="background-color: ${wsInfo.bg}; color: ${wsInfo.color};">
+                            <select data-field="workstream" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1.5 py-0.5 border border-slate-200 focus:outline-none" style="background-color: ${wsInfo.bg}; color: ${wsInfo.color};">
                                 ${Object.keys(WORKSTREAMS).map(ws => `
-                                    <option value="${ws}" ${t.workstream === ws ? 'selected' : ''}>${ws} - ${WORKSTREAMS[ws].name}</option>
+                                    <option value="${ws}" ${t.workstream === ws ? 'selected' : ''}>${ws}</option>
                                 `).join('')}
                             </select>
                         </td>
@@ -164,6 +167,18 @@ export class WbsGridView {
                             <select data-field="stage" data-id="${t.id}" class="text-[11px] font-medium bg-slate-100 border border-slate-200 rounded px-1 py-0.5 focus:outline-none">
                                 ${HARDWARE_STAGES.map(stg => `
                                     <option value="${stg}" ${t.stage === stg ? 'selected' : ''}>${stg}</option>
+                                `).join('')}
+                            </select>
+                        </td>
+                    ` : ''}
+
+                    <!-- Assigned Engineer -->
+                    ${this.visibleColumns.assignedTo ? `
+                        <td class="py-1 px-1 border-r border-slate-200">
+                            <select data-field="assignedTo" data-id="${t.id}" class="w-full text-[11px] font-medium border border-slate-200 rounded px-1 py-0.5 focus:outline-none bg-white">
+                                <option value="">-- Unassigned --</option>
+                                ${this.resources.map(r => `
+                                    <option value="${r.name}" ${t.assignedTo === r.name ? 'selected' : ''}>${r.name}</option>
                                 `).join('')}
                             </select>
                         </td>
@@ -190,14 +205,14 @@ export class WbsGridView {
                     <!-- Procurement Lead Time -->
                     ${this.visibleColumns.leadTime ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
-                            <input type="number" min="0" max="180" data-field="leadTime" data-id="${t.id}" value="${t.leadTime || 0}" class="w-12 text-center border border-amber-200 bg-amber-50/50 focus:bg-white rounded py-0.5 text-xs focus:outline-none" title="Procurement lead time in days">
+                            <input type="number" min="0" max="180" data-field="leadTime" data-id="${t.id}" value="${t.leadTime || 0}" class="w-12 text-center border border-amber-200 bg-amber-50/50 rounded py-0.5 text-xs focus:outline-none" title="Procurement lead time in days">
                         </td>
                     ` : ''}
 
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="date" data-field="start" data-id="${t.id}" value="${t.start}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"'}>
+                            <input type="date" data-field="start" data-id="${t.id}" value="${t.start}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
                         </td>
                     ` : ''}
 
@@ -211,7 +226,7 @@ export class WbsGridView {
                     <!-- Predecessors -->
                     ${this.visibleColumns.predecessors ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="text" data-field="predecessors" data-id="${t.id}" value="${this.escapeHtml(t.predecessors || '')}" placeholder="e.g. 1FS+2d" class="w-full border border-slate-200 font-mono text-[11px] rounded px-1 py-0.5 focus:outline-none focus:border-indigo-500" title="e.g., 2FS+3d, 4SS">
+                            <input type="text" data-field="predecessors" data-id="${t.id}" value="${this.escapeHtml(t.predecessors || '')}" placeholder="e.g. 1FS+2d" class="w-full border border-slate-200 font-mono text-[11px] rounded px-1 py-0.5 focus:outline-none">
                         </td>
                     ` : ''}
 
@@ -231,17 +246,16 @@ export class WbsGridView {
     attachEventListeners() {
         if (!this.container) return;
 
-        // Click row selection
+        // Row click selection
         this.container.querySelectorAll('.wbs-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                // Prevent selection if clicking input elements
                 if (['INPUT', 'SELECT', 'BUTTON', 'SVG', 'PATH'].includes(e.target.tagName)) return;
                 const id = row.getAttribute('data-id');
                 this.selectTask(id);
             });
         });
 
-        // Expand/Collapse summary task
+        // Expand / Collapse
         this.container.querySelectorAll('[data-action="toggle-expand"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -249,12 +263,12 @@ export class WbsGridView {
                 const task = this.tasks.find(t => t.id === id);
                 if (task) {
                     task.expanded = !task.expanded;
-                    this.render(this.tasks);
+                    this.render(this.tasks, this.resources);
                 }
             });
         });
 
-        // Inline input change handlers
+        // Input change handlers
         this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
             element.addEventListener('change', (e) => {
                 const id = element.getAttribute('data-id');
@@ -271,7 +285,7 @@ export class WbsGridView {
             });
         });
 
-        // Toolbar Button handlers
+        // Toolbar buttons
         const addBtn = this.container.querySelector('#btn-add-task');
         if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
 
@@ -307,7 +321,6 @@ export class WbsGridView {
             }
         });
 
-        // Enable toolbar buttons
         ['#btn-add-subtask', '#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
             const btn = this.container.querySelector(selector);
             if (btn) btn.disabled = !taskId;
@@ -331,9 +344,9 @@ export class WbsGridView {
         const filtered = this.tasks.filter(t => 
             t.name.toLowerCase().includes(query) ||
             t.wbs.includes(query) ||
+            (t.assignedTo || '').toLowerCase().includes(query) ||
             t.workstream.toLowerCase().includes(query) ||
-            t.stage.toLowerCase().includes(query) ||
-            t.status.toLowerCase().includes(query)
+            t.stage.toLowerCase().includes(query)
         );
 
         tbody.innerHTML = this.renderRows(filtered);
@@ -344,4 +357,3 @@ export class WbsGridView {
         return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 }
-

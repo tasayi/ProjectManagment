@@ -34,11 +34,16 @@ def bundle():
     # 2. Bundle JS Modules in Topological Dependency Order
     js_files = [
         'js/models/taskModel.js',
+        'js/models/resourceModel.js',
+        'js/models/calendarModel.js',
+        'js/engine/calendarEngine.js',
         'js/engine/dependencyEngine.js',
         'js/engine/baselineEngine.js',
         'js/views/wbsGridView.js',
         'js/views/ganttView.js',
         'js/views/milestonesView.js',
+        'js/views/resourceView.js',
+        'js/views/calendarModalView.js',
         'js/storage/projectStore.js',
         'js/export/excelExporter.js',
         'js/export/printEngine.js',
@@ -64,7 +69,6 @@ def bundle():
 
     combined_js = "\n".join(bundled_js_parts)
 
-    # Replace <script type="module" src="js/app.js"></script> with bundled script
     target_script = '<script type="module" src="js/app.js"></script>'
     if target_script in html_content:
         html_content = html_content.replace(target_script, f'<script>\n{combined_js}\n</script>')

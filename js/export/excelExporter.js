@@ -1,12 +1,12 @@
 /**
- * Excel Exporter Module: Multi-tab Excel (.xlsx) / CSV export for backward compatibility
+ * Excel Exporter Module: Multi-tab Excel (.xlsx) / CSV export including Tasks, Milestones, Resources, and Calendar
  */
 
 import { BaselineEngine } from '../engine/baselineEngine.js';
 
 export class ExcelExporter {
 
-    static exportToExcel(projectTitle, tasks) {
+    static exportToExcel(projectTitle, tasks, resources = [], calendar = {}) {
         if (!window.XLSX) {
             alert('SheetJS Excel library not loaded. Falling back to CSV export.');
             this.exportToCSV(projectTitle, tasks);
@@ -21,6 +21,7 @@ export class ExcelExporter {
             'Activity Name': t.name,
             'Workstream': t.workstream,
             'Hardware Stage': t.stage,
+            'Assigned Engineer': t.assignedTo || 'Unassigned',
             'Status': t.status,
             'Duration (Days)': t.duration,
             'Start Date': t.start,
@@ -28,10 +29,8 @@ export class ExcelExporter {
             'Predecessors': t.predecessors || '',
             'Procurement Lead (Days)': t.leadTime || 0,
             'Vendor': t.vendor || '',
-            'Assigned Engineer': t.assignedTo || '',
             'Progress (%)': t.progress || 0,
-            'Is Milestone': t.isMilestone ? 'YES' : 'NO',
-            'Is Summary': t.isSummary ? 'YES' : 'NO'
+            'Is Milestone': t.isMilestone ? 'YES' : 'NO'
         }));
 
         const wsWbs = window.XLSX.utils.json_to_sheet(wbsData);
@@ -46,6 +45,7 @@ export class ExcelExporter {
                 'Milestone Name': m.name,
                 'Hardware Stage': m.stage,
                 'Workstream': m.workstream,
+                'Assigned Engineer': m.assignedTo || 'Unassigned',
                 'Target Date': m.finish || m.start,
                 'Baseline Date': (m.baseline && m.baseline.finish) || 'N/A',
                 'Variance': v.statusText,
@@ -56,23 +56,30 @@ export class ExcelExporter {
         const wsMilestones = window.XLSX.utils.json_to_sheet(milestoneData);
         window.XLSX.utils.book_append_sheet(wb, wsMilestones, 'Milestones');
 
-        // Sheet 3: Baseline & Variance
-        const varianceData = tasks.map(t => {
-            const v = BaselineEngine.getVariance(t);
-            return {
-                'WBS': t.wbs,
-                'Activity Name': t.name,
-                'Current Start': t.start,
-                'Current Finish': t.finish,
-                'Baseline Start': (t.baseline && t.baseline.start) || 'N/A',
-                'Baseline Finish': (t.baseline && t.baseline.finish) || 'N/A',
-                'Finish Delay (Days)': v.finishVarianceDays,
-                'Status Callout': v.statusText
-            };
-        });
+        // Sheet 3: Resource Pool
+        const resData = resources.map(r => ({
+            'Resource ID': r.id,
+            'Engineer Name': r.name,
+            'Role': r.role,
+            'Primary Workstream': r.workstream,
+            'Capacity (%)': r.capacity
+        }));
 
-        const wsVariance = window.XLSX.utils.json_to_sheet(varianceData);
-        window.XLSX.utils.book_append_sheet(wb, wsVariance, 'Baseline Variance');
+        const wsRes = window.XLSX.utils.json_to_sheet(resData);
+        window.XLSX.utils.book_append_sheet(wb, wsRes, 'Team Resources');
+
+        // Sheet 4: Project Calendar & Holidays
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const workingDayNames = (calendar.workingDays || [1,2,3,4,5]).map(d => dayNames[d]).join(', ');
+
+        const calendarData = [
+            { 'Config Type': 'Standard Weekly Working Days', 'Details': workingDayNames },
+            ... (calendar.holidays || []).map(h => ({ 'Config Type': 'Festive / Company Holiday', 'Details': `${h.date}: ${h.name}` })),
+            ... (calendar.overtimeDays || []).map(o => ({ 'Config Type': 'Overtime Working Day', 'Details': `${o.date}: ${o.note}` }))
+        ];
+
+        const wsCal = window.XLSX.utils.json_to_sheet(calendarData);
+        window.XLSX.utils.book_append_sheet(wb, wsCal, 'Project Calendar');
 
         // Download Excel File
         const fileName = `${(projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_')}.xlsx`;
@@ -80,12 +87,13 @@ export class ExcelExporter {
     }
 
     static exportToCSV(projectTitle, tasks) {
-        const headers = ['WBS', 'Activity Name', 'Workstream', 'Stage', 'Status', 'Duration', 'Start', 'Finish', 'Predecessors', 'LeadTime', 'Progress'];
+        const headers = ['WBS', 'Activity Name', 'Workstream', 'Stage', 'Assigned Engineer', 'Status', 'Duration', 'Start', 'Finish', 'Predecessors', 'LeadTime', 'Progress'];
         const rows = tasks.map(t => [
             `"${t.wbs}"`,
             `"${t.name.replace(/"/g, '""')}"`,
             `"${t.workstream}"`,
             `"${t.stage}"`,
+            `"${t.assignedTo || ''}"`,
             `"${t.status}"`,
             t.duration,
             `"${t.start}"`,
@@ -107,4 +115,3 @@ export class ExcelExporter {
         document.body.removeChild(link);
     }
 }
-

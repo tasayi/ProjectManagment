@@ -106,6 +106,7 @@ body {
     }
 }
 
+
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden">
@@ -118,7 +119,7 @@ body {
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
                 <span>Hardware PM</span>
             </div>
-            <input type="text" id="project-title-input" value="Hardware & Firmware R&D Project" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-64 md:w-80 transition" title="Click to rename project">
+            <input type="text" id="project-title-input" value="Hardware & Firmware R&D Project" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-60 md:w-72 transition" title="Click to rename project">
         </div>
 
         <!-- Center View Switcher & Baseline KPI Summary -->
@@ -126,21 +127,28 @@ body {
             <!-- View Switcher -->
             <div class="bg-slate-800 p-1 rounded-md flex items-center gap-1 border border-slate-700 text-xs">
                 <button id="view-btn-split" class="px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm">Grid & Gantt</button>
+                <button id="view-btn-resources" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Engineer Workload</button>
                 <button id="view-btn-milestones" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Milestone Roadmap</button>
             </div>
 
             <!-- Baseline KPI Status Badge -->
-            <div id="header-baseline-kpi" class="px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
+            <div id="header-baseline-kpi" class="hidden md:block px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
                 Baseline: Not Set
             </div>
         </div>
 
-        <!-- Right Toolbar Actions: Baseline, File Save, Export, Print -->
+        <!-- Right Toolbar Actions: Calendar Config, Baseline, File Save, Export, Print -->
         <div class="flex items-center gap-2">
+            <!-- Calendar Config Button -->
+            <button id="btn-calendar-config" class="px-2.5 py-1 bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-700 text-indigo-200 rounded font-medium text-xs flex items-center gap-1.5 transition shadow-sm" title="Configure Working Days, Festive Holidays & Overtime Days">
+                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span>Calendar</span>
+            </button>
+
             <!-- Set Baseline -->
             <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Snapshot current schedule as baseline">
                 <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                Set Baseline
+                Baseline
             </button>
 
             <!-- Export .prj -->
@@ -159,12 +167,12 @@ body {
             <!-- Export Excel -->
             <button id="btn-export-excel" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition" title="Export to Excel (.xlsx) for backward compatibility">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Excel Export
+                Excel
             </button>
 
             <!-- Presets Select -->
             <select id="preset-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
-                <option value="">Load Preset...</option>
+                <option value="">Presets...</option>
                 <option value="iot_device">IoT Tracker (HW + PCB + FW)</option>
             </select>
 
@@ -184,7 +192,7 @@ body {
 
         <!-- Split View (Grid + Gantt) -->
         <div id="split-view-container" class="w-full h-full flex overflow-hidden">
-            <!-- Left Pane: WBS Grid (Default width: 50%) -->
+            <!-- Left Pane: WBS Grid -->
             <div id="wbs-pane" style="width: 50%; min-width: 340px;" class="h-full flex-shrink-0"></div>
 
             <!-- Draggable Split Resizer Bar -->
@@ -194,8 +202,14 @@ body {
             <div id="gantt-pane" class="flex-1 h-full overflow-hidden"></div>
         </div>
 
+        <!-- Resource Pool & Workload Heatmap View (Initially Hidden) -->
+        <div id="resource-view-container" class="w-full h-full hidden overflow-auto"></div>
+
         <!-- Milestone Executive Roadmap View (Initially Hidden) -->
         <div id="milestones-view-container" class="w-full h-full hidden overflow-auto"></div>
+
+        <!-- Calendar Config Modal Container -->
+        <div id="calendar-modal-container"></div>
 
     </main>
 
@@ -289,27 +303,118 @@ const STATUS_PILLS = {
 };
 
 
-// --- Module: js/engine/dependencyEngine.js ---
+
+// --- Module: js/models/resourceModel.js ---
 /**
- * Dependency Engine: WBS Tree, Dependency Parser, Auto-Scheduler, and Critical Path Method (CPM)
+ * Resource Model & Default Engineers Pool
  */
 
-class DependencyEngine {
+class Resource {
+    constructor(data = {}) {
+        this.id = data.id || 'res_' + Math.random().toString(36).substr(2, 9);
+        this.name = data.name || 'New Engineer';
+        this.role = data.role || 'Hardware Engineer';
+        this.workstream = data.workstream || 'HW'; // HW, EE, ME, FW, PROC, TEST
+        this.capacity = typeof data.capacity === 'number' ? data.capacity : 100; // % capacity (100 = 8h/day)
+    }
+}
+
+const DEFAULT_RESOURCES = [
+    new Resource({ id: 'res_1', name: 'Alex Rivera', role: 'Lead PCB Engineer', workstream: 'EE', capacity: 100 }),
+    new Resource({ id: 'res_2', name: 'Sarah Chen', role: 'Firmware Architect', workstream: 'FW', capacity: 100 }),
+    new Resource({ id: 'res_3', name: 'Marcus Vance', role: 'Industrial & Mechanical Lead', workstream: 'ME', capacity: 100 }),
+    new Resource({ id: 'res_4', name: 'Priya Sharma', role: 'Hardware System Lead', workstream: 'HW', capacity: 100 }),
+    new Resource({ id: 'res_5', name: 'David Kim', role: 'Procurement Specialist', workstream: 'PROC', capacity: 100 }),
+    new Resource({ id: 'res_6', name: 'Elena Rostova', role: 'QA & Compliance Lead', workstream: 'TEST', capacity: 100 })
+];
+
+
+// --- Module: js/models/calendarModel.js ---
+/**
+ * Calendar Model: Working Days, Festive Holidays & Overtime Exception Dates
+ */
+
+class ProjectCalendar {
+    constructor(data = {}) {
+        // Standard working days (0 = Sun, 1 = Mon, ..., 6 = Sat). Default: Mon-Fri (1, 2, 3, 4, 5)
+        this.workingDays = Array.isArray(data.workingDays) ? data.workingDays : [1, 2, 3, 4, 5];
+
+        // List of festive/company holidays: [{ date: 'YYYY-MM-DD', name: 'Holiday Name' }]
+        this.holidays = Array.isArray(data.holidays) ? data.holidays : [
+            { date: '2026-10-02', name: 'Gandhi Jayanti' },
+            { date: '2026-12-25', name: 'Christmas Day' },
+            { date: '2027-01-01', name: 'New Year\'s Day' }
+        ];
+
+        // Overtime/Exception working days (e.g. crunch Saturday): [{ date: 'YYYY-MM-DD', note: 'EVT Build Saturday' }]
+        this.overtimeDays = Array.isArray(data.overtimeDays) ? data.overtimeDays : [];
+    }
+}
+
+
+// --- Module: js/engine/calendarEngine.js ---
+/**
+ * Calendar Engine: Evaluates working days, holidays, and overtime days for task scheduling
+ */
+
+
+
+class CalendarEngine {
 
     /**
-     * Add working days to a date string (skipping weekends)
+     * Check if a specific date string (YYYY-MM-DD) is a valid working day
      */
-    static addWorkingDays(startDateStr, days) {
+    static isWorkingDay(dateStr, calendar = new ProjectCalendar()) {
+        if (!dateStr) return false;
+        
+        // 1. Check if explicitly marked as Overtime Working Day
+        if (calendar.overtimeDays && calendar.overtimeDays.some(o => o.date === dateStr)) {
+            return true;
+        }
+
+        // 2. Check if explicitly marked as Festive / Company Holiday
+        if (calendar.holidays && calendar.holidays.some(h => h.date === dateStr)) {
+            return false;
+        }
+
+        // 3. Check standard weekly working days (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+        const date = new Date(dateStr);
+        const dayOfWeek = date.getDay();
+        const workingDays = calendar.workingDays || [1, 2, 3, 4, 5];
+
+        return workingDays.includes(dayOfWeek);
+    }
+
+    /**
+     * Get Holiday Info for a date if it exists
+     */
+    static getHoliday(dateStr, calendar = new ProjectCalendar()) {
+        if (!calendar || !calendar.holidays) return null;
+        return calendar.holidays.find(h => h.date === dateStr) || null;
+    }
+
+    /**
+     * Get Overtime Working Day Info if it exists
+     */
+    static getOvertime(dateStr, calendar = new ProjectCalendar()) {
+        if (!calendar || !calendar.overtimeDays) return null;
+        return calendar.overtimeDays.find(o => o.date === dateStr) || null;
+    }
+
+    /**
+     * Add N working days to a start date string (YYYY-MM-DD) respecting calendar
+     */
+    static addWorkingDays(startDateStr, days, calendar = new ProjectCalendar()) {
         if (!startDateStr) return '';
         if (days <= 0) return startDateStr;
-        
+
         let date = new Date(startDateStr);
         let count = 0;
-        
-        while (count < days) {
+
+        while (count < days - 1) {
             date.setDate(date.getDate() + 1);
-            const day = date.getDay();
-            if (day !== 0 && day !== 6) { // Not Sunday or Saturday
+            const dateStr = date.toISOString().split('T')[0];
+            if (this.isWorkingDay(dateStr, calendar)) {
                 count++;
             }
         }
@@ -317,9 +422,9 @@ class DependencyEngine {
     }
 
     /**
-     * Calculate working days between two dates (inclusive)
+     * Calculate count of working days between start and finish dates (inclusive)
      */
-    static getWorkingDays(startDateStr, endDateStr) {
+    static getWorkingDays(startDateStr, endDateStr, calendar = new ProjectCalendar()) {
         if (!startDateStr || !endDateStr) return 1;
         let start = new Date(startDateStr);
         let end = new Date(endDateStr);
@@ -327,20 +432,47 @@ class DependencyEngine {
 
         let count = 0;
         let current = new Date(start);
+
         while (current <= end) {
-            const day = current.getDay();
-            if (day !== 0 && day !== 6) {
+            const dateStr = current.toISOString().split('T')[0];
+            if (this.isWorkingDay(dateStr, calendar)) {
                 count++;
             }
             current.setDate(current.getDate() + 1);
         }
+
         return Math.max(1, count);
+    }
+}
+
+
+// --- Module: js/engine/dependencyEngine.js ---
+/**
+ * Dependency Engine: WBS Tree, Dependency Parser, Auto-Scheduler, and Critical Path Method (CPM)
+ */
+
+
+
+class DependencyEngine {
+
+    /**
+     * Add working days to a date string using CalendarEngine
+     */
+    static addWorkingDays(startDateStr, days, calendar) {
+        return CalendarEngine.addWorkingDays(startDateStr, days, calendar);
+    }
+
+    /**
+     * Calculate working days between two dates using CalendarEngine
+     */
+    static getWorkingDays(startDateStr, endDateStr, calendar) {
+        return CalendarEngine.getWorkingDays(startDateStr, endDateStr, calendar);
     }
 
     /**
      * Update WBS numbers and indent hierarchy for all tasks
      */
-    static updateWBSHierarchy(tasks) {
+    static updateWBSHierarchy(tasks, calendar) {
         const idMap = new Map();
         tasks.forEach(t => idMap.set(t.id, t));
 
@@ -369,17 +501,14 @@ class DependencyEngine {
         assignWBS('root', '');
 
         // Recalculate summary tasks bottom-up
-        this.recalculateSummaryTasks(tasks, childrenMap);
+        this.recalculateSummaryTasks(tasks, childrenMap, calendar);
     }
 
     /**
      * Recalculate summary task dates, duration, and progress from subtasks
      */
-    static recalculateSummaryTasks(tasks, childrenMap) {
-        // Process summary tasks from deepest level up
+    static recalculateSummaryTasks(tasks, childrenMap, calendar) {
         const summaryTasks = tasks.filter(t => t.isSummary);
-        
-        // Sort summary tasks by WBS depth descending
         summaryTasks.sort((a, b) => b.wbs.split('.').length - a.wbs.split('.').length);
 
         summaryTasks.forEach(parent => {
@@ -410,7 +539,7 @@ class DependencyEngine {
             if (minStart) parent.start = minStart;
             if (maxFinish) parent.finish = maxFinish;
             if (minStart && maxFinish) {
-                parent.duration = this.getWorkingDays(minStart, maxFinish);
+                parent.duration = this.getWorkingDays(minStart, maxFinish, calendar);
             }
             parent.progress = totalDuration > 0 ? Math.round(totalWeightedProgress / totalDuration) : 0;
         });
@@ -418,12 +547,10 @@ class DependencyEngine {
 
     /**
      * Parse predecessor string into structured objects
-     * Format examples: "2", "2FS", "2FS+3d", "3SS-1d", "4FF"
      */
     static parsePredecessors(predStr, tasks) {
         if (!predStr || typeof predStr !== 'string') return [];
         
-        // Map WBS or Index or ID to task
         const wbsMap = new Map();
         tasks.forEach((t, idx) => {
             wbsMap.set(t.wbs, t);
@@ -435,7 +562,6 @@ class DependencyEngine {
         const results = [];
 
         items.forEach(item => {
-            // Regex to match: [WBS/ID][TYPE: FS|SS|FF|SF]?[+|- LAG]?
             const match = item.match(/^([\w.]+)(FS|SS|FF|SF)?(?:([+-])(\d+)[dD]?)?$/i);
             if (match) {
                 const targetRef = match[1];
@@ -458,17 +584,14 @@ class DependencyEngine {
     }
 
     /**
-     * Run Auto-Scheduler & Critical Path Method (CPM)
+     * Run Auto-Scheduler & Critical Path Method (CPM) using Calendar Engine
      */
-    static scheduleProject(tasks) {
+    static scheduleProject(tasks, calendar) {
         if (!tasks || tasks.length === 0) return;
 
-        this.updateWBSHierarchy(tasks);
+        this.updateWBSHierarchy(tasks, calendar);
 
         const leafTasks = tasks.filter(t => !t.isSummary);
-        const taskMap = new Map(tasks.map(t => [t.id, t]));
-
-        // Calculate early start & finish based on predecessors
         let changed = true;
         let iterations = 0;
         const maxIterations = tasks.length * 2;
@@ -490,19 +613,18 @@ class DependencyEngine {
                     const predFinish = new Date(predTask.finish);
 
                     switch (pred.type) {
-                        case 'FS': // Finish to Start
+                        case 'FS':
                             requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() + 1); // next day
+                            requiredDate.setDate(requiredDate.getDate() + 1);
                             break;
-                        case 'SS': // Start to Start
+                        case 'SS':
                             requiredDate = new Date(predStart);
                             break;
-                        case 'FF': // Finish to Finish
+                        case 'FF':
                             requiredDate = new Date(predFinish);
-                            // Finish should align, so start = finish - task.duration
                             requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
                             break;
-                        case 'SF': // Start to Finish
+                        case 'SF':
                             requiredDate = new Date(predStart);
                             requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
                             break;
@@ -511,7 +633,6 @@ class DependencyEngine {
                             requiredDate.setDate(requiredDate.getDate() + 1);
                     }
 
-                    // Apply lag
                     if (pred.lag !== 0) {
                         requiredDate.setDate(requiredDate.getDate() + pred.lag);
                     }
@@ -522,7 +643,7 @@ class DependencyEngine {
                 });
 
                 const calculatedStart = earliestStart.toISOString().split('T')[0];
-                const calculatedFinish = this.addWorkingDays(calculatedStart, task.duration);
+                const calculatedFinish = this.addWorkingDays(calculatedStart, task.duration, calendar);
 
                 if (task.start !== calculatedStart || task.finish !== calculatedFinish) {
                     task.start = calculatedStart;
@@ -532,10 +653,7 @@ class DependencyEngine {
             });
         }
 
-        // Recalculate summary tasks after leaf tasks update
-        this.updateWBSHierarchy(tasks);
-
-        // Compute Critical Path Method (CPM) Slack
+        this.updateWBSHierarchy(tasks, calendar);
         this.calculateCriticalPath(tasks);
     }
 
@@ -545,7 +663,6 @@ class DependencyEngine {
     static calculateCriticalPath(tasks) {
         if (tasks.length === 0) return;
 
-        // Find latest project finish date
         let maxProjectFinish = null;
         tasks.forEach(t => {
             if (t.finish && (!maxProjectFinish || new Date(t.finish) > new Date(maxProjectFinish))) {
@@ -555,18 +672,15 @@ class DependencyEngine {
 
         if (!maxProjectFinish) return;
 
-        // Forward and backward slack estimate
         tasks.forEach(t => {
-            const preds = this.parsePredecessors(t.predecessors, tasks);
+            const finishDate = new Date(t.finish);
+            const projFinish = new Date(maxProjectFinish);
+            const diffDays = Math.abs((projFinish - finishDate) / (1000 * 60 * 60 * 24));
+
             const isTargetOfPred = tasks.some(other => {
                 const otherPreds = this.parsePredecessors(other.predecessors, tasks);
                 return otherPreds.some(p => p.targetTask.id === t.id);
             });
-
-            // If task finish matches project finish or has 0 slack, mark critical
-            const finishDate = new Date(t.finish);
-            const projFinish = new Date(maxProjectFinish);
-            const diffDays = Math.abs((projFinish - finishDate) / (1000 * 60 * 60 * 24));
 
             if (!isTargetOfPred && diffDays <= 1) {
                 t.isCritical = true;
@@ -714,9 +828,10 @@ class BaselineEngine {
 }
 
 
+
 // --- Module: js/views/wbsGridView.js ---
 /**
- * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing & Status Pills
+ * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing, Status Pills & Engineer Assignments
  */
 
 
@@ -728,23 +843,26 @@ class WbsGridView {
         this.onTaskChange = onTaskChange; // Callback when data changes
         this.onTaskSelect = onTaskSelect; // Callback when row selected
         this.selectedTaskId = null;
+        this.resources = [];
         this.visibleColumns = {
             workstream: true,
             stage: true,
+            status: true,
+            assignedTo: true,
             duration: true,
             dates: true,
             predecessors: true,
-            status: true,
             leadTime: true,
-            vendor: false,
             variance: true
         };
     }
 
-    render(tasks) {
+    render(tasks, resources = []) {
         if (!this.container) return;
 
         this.tasks = tasks;
+        this.resources = resources;
+
         const html = `
             <div class="wbs-grid-container flex flex-col h-full bg-white border-r border-slate-200 overflow-hidden select-none">
                 <!-- Grid Header Toolbar -->
@@ -785,12 +903,13 @@ class WbsGridView {
                         <thead class="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-slate-600 font-semibold uppercase tracking-wider">
                             <tr>
                                 <th class="py-2 px-2 w-12 text-center border-r border-slate-200">WBS</th>
-                                <th class="py-2 px-3 min-w-[200px] border-r border-slate-200">Activity Name</th>
-                                ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Workstream</th>' : ''}
-                                ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-20 border-r border-slate-200">Stage</th>' : ''}
-                                ${this.visibleColumns.status ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Status</th>' : ''}
+                                <th class="py-2 px-3 min-w-[180px] border-r border-slate-200">Activity Name</th>
+                                ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Stream</th>' : ''}
+                                ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-16 border-r border-slate-200">Stage</th>' : ''}
+                                ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Assigned Engineer</th>' : ''}
+                                ${this.visibleColumns.status ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Status</th>' : ''}
                                 ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
-                                ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-20 text-center border-r border-slate-200" title="Procurement / Fab Lead Time">Lead (d)</th>' : ''}
+                                ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Procurement Lead Time">Lead (d)</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Start</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Finish</th>' : ''}
                                 ${this.visibleColumns.predecessors ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Predecessors</th>' : ''}
@@ -811,10 +930,9 @@ class WbsGridView {
 
     renderRows(tasks) {
         if (!tasks || tasks.length === 0) {
-            return `<tr><td colspan="10" class="p-6 text-center text-slate-400 italic">No tasks found. Click "Add Activity" to create one.</td></tr>`;
+            return `<tr><td colspan="12" class="p-6 text-center text-slate-400 italic">No tasks found. Click "Add Activity" to create one.</td></tr>`;
         }
 
-        // Determine visible tasks based on summary expand/collapse state
         const hiddenIds = new Set();
         const idMap = new Map(tasks.map(t => [t.id, t]));
 
@@ -836,7 +954,7 @@ class WbsGridView {
 
             const isSelected = t.id === this.selectedTaskId;
             const variance = BaselineEngine.getVariance(t);
-            const indentLevel = (t.wbs.split('.').length - 1) * 16; // 16px per indent level
+            const indentLevel = (t.wbs.split('.').length - 1) * 14;
             const wsInfo = WORKSTREAMS[t.workstream] || WORKSTREAMS['HW'];
             const statusInfo = STATUS_PILLS[t.status] || STATUS_PILLS['Not Started'];
 
@@ -847,7 +965,7 @@ class WbsGridView {
                         ${t.wbs}
                     </td>
 
-                    <!-- Activity Name + Tree Control -->
+                    <!-- Activity Name -->
                     <td class="py-1 px-2 border-r border-slate-200 overflow-hidden">
                         <div class="flex items-center gap-1" style="padding-left: ${indentLevel}px;">
                             ${t.isSummary ? `
@@ -867,9 +985,9 @@ class WbsGridView {
                     <!-- Workstream -->
                     ${this.visibleColumns.workstream ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <select data-field="workstream" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1.5 py-0.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500" style="background-color: ${wsInfo.bg}; color: ${wsInfo.color};">
+                            <select data-field="workstream" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1.5 py-0.5 border border-slate-200 focus:outline-none" style="background-color: ${wsInfo.bg}; color: ${wsInfo.color};">
                                 ${Object.keys(WORKSTREAMS).map(ws => `
-                                    <option value="${ws}" ${t.workstream === ws ? 'selected' : ''}>${ws} - ${WORKSTREAMS[ws].name}</option>
+                                    <option value="${ws}" ${t.workstream === ws ? 'selected' : ''}>${ws}</option>
                                 `).join('')}
                             </select>
                         </td>
@@ -881,6 +999,18 @@ class WbsGridView {
                             <select data-field="stage" data-id="${t.id}" class="text-[11px] font-medium bg-slate-100 border border-slate-200 rounded px-1 py-0.5 focus:outline-none">
                                 ${HARDWARE_STAGES.map(stg => `
                                     <option value="${stg}" ${t.stage === stg ? 'selected' : ''}>${stg}</option>
+                                `).join('')}
+                            </select>
+                        </td>
+                    ` : ''}
+
+                    <!-- Assigned Engineer -->
+                    ${this.visibleColumns.assignedTo ? `
+                        <td class="py-1 px-1 border-r border-slate-200">
+                            <select data-field="assignedTo" data-id="${t.id}" class="w-full text-[11px] font-medium border border-slate-200 rounded px-1 py-0.5 focus:outline-none bg-white">
+                                <option value="">-- Unassigned --</option>
+                                ${this.resources.map(r => `
+                                    <option value="${r.name}" ${t.assignedTo === r.name ? 'selected' : ''}>${r.name}</option>
                                 `).join('')}
                             </select>
                         </td>
@@ -907,14 +1037,14 @@ class WbsGridView {
                     <!-- Procurement Lead Time -->
                     ${this.visibleColumns.leadTime ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
-                            <input type="number" min="0" max="180" data-field="leadTime" data-id="${t.id}" value="${t.leadTime || 0}" class="w-12 text-center border border-amber-200 bg-amber-50/50 focus:bg-white rounded py-0.5 text-xs focus:outline-none" title="Procurement lead time in days">
+                            <input type="number" min="0" max="180" data-field="leadTime" data-id="${t.id}" value="${t.leadTime || 0}" class="w-12 text-center border border-amber-200 bg-amber-50/50 rounded py-0.5 text-xs focus:outline-none" title="Procurement lead time in days">
                         </td>
                     ` : ''}
 
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="date" data-field="start" data-id="${t.id}" value="${t.start}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"'}>
+                            <input type="date" data-field="start" data-id="${t.id}" value="${t.start}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
                         </td>
                     ` : ''}
 
@@ -928,7 +1058,7 @@ class WbsGridView {
                     <!-- Predecessors -->
                     ${this.visibleColumns.predecessors ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="text" data-field="predecessors" data-id="${t.id}" value="${this.escapeHtml(t.predecessors || '')}" placeholder="e.g. 1FS+2d" class="w-full border border-slate-200 font-mono text-[11px] rounded px-1 py-0.5 focus:outline-none focus:border-indigo-500" title="e.g., 2FS+3d, 4SS">
+                            <input type="text" data-field="predecessors" data-id="${t.id}" value="${this.escapeHtml(t.predecessors || '')}" placeholder="e.g. 1FS+2d" class="w-full border border-slate-200 font-mono text-[11px] rounded px-1 py-0.5 focus:outline-none">
                         </td>
                     ` : ''}
 
@@ -948,17 +1078,16 @@ class WbsGridView {
     attachEventListeners() {
         if (!this.container) return;
 
-        // Click row selection
+        // Row click selection
         this.container.querySelectorAll('.wbs-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                // Prevent selection if clicking input elements
                 if (['INPUT', 'SELECT', 'BUTTON', 'SVG', 'PATH'].includes(e.target.tagName)) return;
                 const id = row.getAttribute('data-id');
                 this.selectTask(id);
             });
         });
 
-        // Expand/Collapse summary task
+        // Expand / Collapse
         this.container.querySelectorAll('[data-action="toggle-expand"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -966,12 +1095,12 @@ class WbsGridView {
                 const task = this.tasks.find(t => t.id === id);
                 if (task) {
                     task.expanded = !task.expanded;
-                    this.render(this.tasks);
+                    this.render(this.tasks, this.resources);
                 }
             });
         });
 
-        // Inline input change handlers
+        // Input change handlers
         this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
             element.addEventListener('change', (e) => {
                 const id = element.getAttribute('data-id');
@@ -988,7 +1117,7 @@ class WbsGridView {
             });
         });
 
-        // Toolbar Button handlers
+        // Toolbar buttons
         const addBtn = this.container.querySelector('#btn-add-task');
         if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
 
@@ -1024,7 +1153,6 @@ class WbsGridView {
             }
         });
 
-        // Enable toolbar buttons
         ['#btn-add-subtask', '#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
             const btn = this.container.querySelector(selector);
             if (btn) btn.disabled = !taskId;
@@ -1048,9 +1176,9 @@ class WbsGridView {
         const filtered = this.tasks.filter(t => 
             t.name.toLowerCase().includes(query) ||
             t.wbs.includes(query) ||
+            (t.assignedTo || '').toLowerCase().includes(query) ||
             t.workstream.toLowerCase().includes(query) ||
-            t.stage.toLowerCase().includes(query) ||
-            t.status.toLowerCase().includes(query)
+            t.stage.toLowerCase().includes(query)
         );
 
         tbody.innerHTML = this.renderRows(filtered);
@@ -1065,8 +1193,9 @@ class WbsGridView {
 
 // --- Module: js/views/ganttView.js ---
 /**
- * Gantt View Component: Interactive SVG Timeline, Dependency Lines, Baseline Ghost Bars, and Bidirectional Drag & Drop
+ * Gantt View Component: Interactive SVG Timeline, Dependency Lines, Baseline Ghost Bars, Calendar Off Days & Bidirectional Drag & Drop
  */
+
 
 
 
@@ -1075,34 +1204,32 @@ class WbsGridView {
 class GanttView {
     constructor(containerElement, onTaskUpdate) {
         this.container = containerElement;
-        this.onTaskUpdate = onTaskUpdate; // Callback when dates/durations are dragged
-        this.zoom = 'Week'; // Day, Week, Month
+        this.onTaskUpdate = onTaskUpdate;
+        this.zoom = 'Week';
         this.showCriticalPath = false;
         this.showBaselineGhost = true;
         this.dragState = null;
-        this.dayWidth = 28; // pixels per day (Week zoom)
-        this.rowHeight = 33; // pixels per task row
+        this.dayWidth = 28;
+        this.rowHeight = 33;
+        this.calendar = null;
     }
 
-    render(tasks) {
+    render(tasks, calendar) {
         if (!this.container) return;
 
         this.tasks = tasks;
+        this.calendar = calendar;
 
-        // Calculate timeline date bounds
         const bounds = this.getTimelineBounds(tasks);
         this.startDate = bounds.start;
         this.endDate = bounds.end;
-        this.totalDays = DependencyEngine.getWorkingDays(this.startDate, this.endDate) + 14;
+        this.totalDays = DependencyEngine.getWorkingDays(this.startDate, this.endDate, this.calendar) + 14;
 
-        // Set pixel width based on zoom level
         if (this.zoom === 'Day') this.dayWidth = 44;
         else if (this.zoom === 'Week') this.dayWidth = 28;
         else if (this.zoom === 'Month') this.dayWidth = 14;
 
         const timelineWidth = Math.max(800, this.totalDays * this.dayWidth);
-
-        // Filter visible tasks based on summary expansion
         const visibleTasks = this.getVisibleTasks(tasks);
 
         const html = `
@@ -1142,7 +1269,7 @@ class GanttView {
 
                         <!-- Main Gantt SVG Layer -->
                         <div class="gantt-body relative" style="height: ${visibleTasks.length * this.rowHeight}px;">
-                            <!-- Grid Background Lines -->
+                            <!-- Grid Background Lines with Calendar Shading -->
                             ${this.renderGridLines(timelineWidth, visibleTasks.length)}
 
                             <!-- Predecessor Connector Lines SVG -->
@@ -1188,7 +1315,6 @@ class GanttView {
             });
         }
 
-        // Add 7 days padding to bounds
         minDate.setDate(minDate.getDate() - 5);
         maxDate.setDate(maxDate.getDate() + 14);
 
@@ -1232,10 +1358,27 @@ class GanttView {
             const dateStr = curr.toISOString().split('T')[0];
             const monthName = curr.toLocaleString('default', { month: 'short', year: 'numeric' });
             const dayNum = curr.getDate();
-            const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+
+            const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
+            const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
+            const isWorking = CalendarEngine.isWorkingDay(dateStr, this.calendar);
+
+            let bgClass = 'bg-white text-slate-700 font-semibold';
+            let titleAttr = '';
+
+            if (isOvertime) {
+                bgClass = 'bg-amber-200 text-amber-900 font-bold';
+                titleAttr = `Overtime: ${isOvertime.note}`;
+            } else if (isHoliday) {
+                bgClass = 'bg-red-200 text-red-900 font-bold';
+                titleAttr = `Holiday: ${isHoliday.name}`;
+            } else if (!isWorking) {
+                bgClass = 'bg-slate-200/70 text-slate-400 font-normal';
+                titleAttr = 'Weekly Off';
+            }
 
             daysHtml.push(`
-                <div style="width: ${this.dayWidth}px;" class="flex-shrink-0 text-center py-1 border-r border-slate-200 text-[10px] ${isWeekend ? 'bg-slate-200/50 text-slate-400 font-normal' : 'text-slate-600 font-semibold'}">
+                <div style="width: ${this.dayWidth}px;" class="flex-shrink-0 text-center py-1 border-r border-slate-200 text-[10px] ${bgClass}" title="${titleAttr}">
                     ${dayNum}
                 </div>
             `);
@@ -1269,9 +1412,22 @@ class GanttView {
         const end = new Date(this.endDate);
 
         while (curr <= end) {
-            const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+            const dateStr = curr.toISOString().split('T')[0];
+            const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
+            const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
+            const isWorking = CalendarEngine.isWorkingDay(dateStr, this.calendar);
+
+            let bgClass = '';
+            if (isOvertime) {
+                bgClass = 'bg-amber-50/50';
+            } else if (isHoliday) {
+                bgClass = 'bg-red-50/40';
+            } else if (!isWorking) {
+                bgClass = 'bg-slate-100/70';
+            }
+
             columns.push(`
-                <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${isWeekend ? 'bg-slate-50/70' : ''}"></div>
+                <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${bgClass}"></div>
             `);
             curr.setDate(curr.getDate() + 1);
         }
@@ -1308,7 +1464,6 @@ class GanttView {
         const isCritical = this.showCriticalPath && task.isCritical;
         const variance = BaselineEngine.getVariance(task);
 
-        // Baseline Ghost Bar calculations
         let baselineGhostHtml = '';
         if (this.showBaselineGhost && task.baseline && task.baseline.start && task.baseline.finish) {
             const bx = this.dateToPixel(task.baseline.start);
@@ -1321,7 +1476,6 @@ class GanttView {
             `;
         }
 
-        // Summary Task Chevron Bracket Bar
         if (task.isSummary) {
             return `
                 ${baselineGhostHtml}
@@ -1329,7 +1483,6 @@ class GanttView {
                     <div class="w-full h-2.5 bg-slate-800 rounded-t flex items-center relative">
                         <div class="h-full bg-slate-600 rounded-t" style="width: ${task.progress || 0}%;"></div>
                     </div>
-                    <!-- Chevron end caps -->
                     <div class="absolute -left-1 top-0 w-2 h-4 bg-slate-800 clip-path-left"></div>
                     <div class="absolute -right-1 top-0 w-2 h-4 bg-slate-800 clip-path-right"></div>
                     <span class="absolute left-full ml-2 top-0 text-[11px] font-bold text-slate-700 whitespace-nowrap">
@@ -1339,7 +1492,6 @@ class GanttView {
             `;
         }
 
-        // Milestone Marker
         if (task.isMilestone) {
             const mx = x + this.dayWidth / 2 - 8;
             return `
@@ -1353,7 +1505,6 @@ class GanttView {
             `;
         }
 
-        // Lead Time extension bar (e.g. procurement lead time)
         let leadTimeHtml = '';
         if (task.leadTime > 0) {
             const lx = finishX + this.dayWidth;
@@ -1365,7 +1516,6 @@ class GanttView {
             `;
         }
 
-        // Regular Task Bar
         const barColor = isCritical ? '#ef4444' : ws.color;
         const progressWidth = `${task.progress || 0}%`;
 
@@ -1373,22 +1523,18 @@ class GanttView {
             ${baselineGhostHtml}
             ${leadTimeHtml}
             <div data-task-id="${task.id}" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
-                <!-- Progress Fill -->
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
-                <!-- Task Name Label inside/outside -->
                 <span class="relative z-10 truncate text-[11px] font-medium">
-                    ${this.escapeHtml(task.name)}
+                    ${this.escapeHtml(task.name)} ${task.assignedTo ? `(${task.assignedTo})` : ''}
                 </span>
 
-                <!-- Self-Explaining Variance Badge Callout right on Gantt -->
                 ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `
                     <span class="absolute left-full ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm ${variance.badgeClass} whitespace-nowrap z-20">
                         ${variance.statusText}
                     </span>
                 ` : ''}
 
-                <!-- Drag Resize Right Handle -->
                 <div data-handle="right" data-task-id="${task.id}" class="gantt-handle-right absolute right-0 top-0 bottom-0 w-2 hover:w-3 bg-white/40 hover:bg-white cursor-ew-resize rounded-r transition-all"></div>
             </div>
         `;
@@ -1409,7 +1555,6 @@ class GanttView {
 
                 if (fromIndex === undefined || toIndex === undefined) return;
 
-                // Coordinates calculation
                 const fromY = fromIndex * this.rowHeight + 15;
                 const toY = toIndex * this.rowHeight + 15;
 
@@ -1420,7 +1565,6 @@ class GanttView {
                 const strokeColor = isCritical ? '#ef4444' : '#94a3b8';
                 const strokeWidth = isCritical ? 2.5 : 1.5;
 
-                // Path drawing with right-angle bends
                 const midX = fromX + 12;
                 let pathData = '';
 
@@ -1450,20 +1594,18 @@ class GanttView {
     attachEventListeners(visibleTasks) {
         if (!this.container) return;
 
-        // Zoom button handlers
         this.container.querySelectorAll('[data-zoom]').forEach(btn => {
             btn.onclick = () => {
                 this.zoom = btn.getAttribute('data-zoom');
-                this.render(this.tasks);
+                this.render(this.tasks, this.calendar);
             };
         });
 
-        // Toggle checkboxes
         const cpToggle = this.container.querySelector('#toggle-critical-path');
         if (cpToggle) {
             cpToggle.onchange = (e) => {
                 this.showCriticalPath = e.target.checked;
-                this.render(this.tasks);
+                this.render(this.tasks, this.calendar);
             };
         }
 
@@ -1471,11 +1613,10 @@ class GanttView {
         if (bgToggle) {
             bgToggle.onchange = (e) => {
                 this.showBaselineGhost = e.target.checked;
-                this.render(this.tasks);
+                this.render(this.tasks, this.calendar);
             };
         }
 
-        // Bidirectional Drag & Drop Event Handling
         this.initDragAndDrop(visibleTasks);
     }
 
@@ -1519,19 +1660,16 @@ class GanttView {
             if (!task) return;
 
             if (isResizing) {
-                // Adjust duration
                 const newDuration = Math.max(1, initialDuration + deltaDays);
                 task.duration = newDuration;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration);
+                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
             } else {
-                // Translate start date
                 const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
                 task.start = newStart;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration);
+                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
             }
 
-            // Real-time render update
-            this.render(this.tasks);
+            this.render(this.tasks, this.calendar);
         };
 
         const onMouseUp = () => {
@@ -1670,10 +1808,478 @@ class MilestonesView {
 }
 
 
+
+// --- Module: js/views/resourceView.js ---
+/**
+ * Resource View: Engineer Pool Management & Workload Allocation Heatmap Inspector
+ */
+
+
+
+
+class ResourceView {
+    constructor(containerElement, onResourceChange) {
+        this.container = containerElement;
+        this.onResourceChange = onResourceChange;
+    }
+
+    render(resources, tasks) {
+        if (!this.container) return;
+
+        this.resources = resources || [];
+        this.tasks = tasks || [];
+
+        const html = `
+            <div class="resource-view flex flex-col h-full bg-slate-50 overflow-auto p-4 select-none">
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-4 bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                            Hardware Team Engineers & Workload Allocation Heatmap
+                        </h2>
+                        <p class="text-xs text-slate-500">Manage engineer assignments and inspect daily capacity loading to spot over-allocation bottlenecks.</p>
+                    </div>
+                    <button id="btn-add-engineer" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold text-xs shadow transition flex items-center gap-1">
+                        + Add Engineer
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1">
+                    <!-- Left: Engineers Pool Table -->
+                    <div class="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+                        <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center">
+                            <span>Team Resource Pool</span>
+                            <span class="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full text-[10px]">${this.resources.length} Members</span>
+                        </div>
+                        <div class="p-3 flex-1 overflow-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
+                                    <tr>
+                                        <th class="p-2">Engineer Name</th>
+                                        <th class="p-2">Role</th>
+                                        <th class="p-2">Stream</th>
+                                        <th class="p-2 text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    ${this.resources.map(r => {
+                                        const ws = WORKSTREAMS[r.workstream] || WORKSTREAMS['HW'];
+                                        return `
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="p-2 font-bold text-slate-800">${this.escapeHtml(r.name)}</td>
+                                                <td class="p-2 text-slate-600">${this.escapeHtml(r.role)}</td>
+                                                <td class="p-2">
+                                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold" style="background-color: ${ws.bg}; color: ${ws.color};">
+                                                        ${r.workstream}
+                                                    </span>
+                                                </td>
+                                                <td class="p-2 text-center">
+                                                    <button data-action="delete-resource" data-id="${r.id}" class="text-red-500 hover:text-red-700 font-bold text-xs">✕</button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Right: Workload Heatmap Matrix (Spans 2 columns) -->
+                    <div class="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+                        <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center">
+                            <span>Engineer Daily Workload Heatmap (% Loading)</span>
+                            <div class="flex items-center gap-2 text-[10px]">
+                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-200 rounded"></span> ≤100% Normal</span>
+                                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-400 rounded"></span> >100% Over-Allocated</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-auto">
+                            ${this.renderHeatmapMatrix(this.resources, this.tasks)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.container.innerHTML = html;
+        this.attachEventListeners();
+    }
+
+    renderHeatmapMatrix(resources, tasks) {
+        // Build 21-day timeline matrix
+        const dates = [];
+        let curr = new Date();
+        curr.setDate(curr.getDate() - 2);
+
+        for (let i = 0; i < 21; i++) {
+            dates.push(curr.toISOString().split('T')[0]);
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        // Map workload per resource per date
+        const workloadMap = new Map(); // key: resourceId_date -> total % loading
+
+        tasks.forEach(task => {
+            if (!task.assignedTo || !task.start || !task.finish) return;
+            const res = resources.find(r => r.name === task.assignedTo || r.id === task.assignedTo);
+            if (!res) return;
+
+            let d = new Date(task.start);
+            const finishDate = new Date(task.finish);
+
+            while (d <= finishDate) {
+                const dateStr = d.toISOString().split('T')[0];
+                const key = `${res.id}_${dateStr}`;
+                const currentLoad = workloadMap.get(key) || 0;
+                workloadMap.set(key, currentLoad + 100); // 100% capacity per assigned task
+                d.setDate(d.getDate() + 1);
+            }
+        });
+
+        return `
+            <table class="w-full text-left text-xs border-collapse">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0">
+                    <tr>
+                        <th class="p-2 border-r border-slate-200 min-w-[120px] bg-slate-100">Engineer</th>
+                        ${dates.map(d => {
+                            const dateObj = new Date(d);
+                            const dayNum = dateObj.getDate();
+                            const monthShort = dateObj.toLocaleString('default', { month: 'short' });
+                            return `<th class="p-1 text-center border-r border-slate-200 min-w-[36px] text-[10px]">${monthShort}<br>${dayNum}</th>`;
+                        }).join('')}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${resources.map(res => `
+                        <tr>
+                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-slate-50/50">
+                                ${this.escapeHtml(res.name)}
+                            </td>
+                            ${dates.map(d => {
+                                const key = `${res.id}_${d}`;
+                                const load = workloadMap.get(key) || 0;
+
+                                let bgClass = 'bg-white text-slate-300';
+                                if (load > 0 && load <= 100) {
+                                    bgClass = 'bg-emerald-100 text-emerald-800 font-bold';
+                                } else if (load > 100) {
+                                    bgClass = 'bg-red-500 text-white font-extrabold shadow-inner';
+                                }
+
+                                return `
+                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} text-[10px]" title="${res.name}: ${load}% on ${d}">
+                                        ${load > 0 ? `${load}%` : '-'}
+                                    </td>
+                                `;
+                            }).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    attachEventListeners() {
+        if (!this.container) return;
+
+        // Add Engineer button
+        const addBtn = this.container.querySelector('#btn-add-engineer');
+        if (addBtn) {
+            addBtn.onclick = () => {
+                const name = prompt('Enter Engineer Name:');
+                if (name && name.trim()) {
+                    const role = prompt('Enter Engineer Role (e.g. Lead Firmware Engineer):') || 'Hardware Engineer';
+                    const newRes = new Resource({
+                        name: name.trim(),
+                        role: role.trim(),
+                        workstream: 'HW'
+                    });
+                    this.resources.push(newRes);
+                    if (this.onResourceChange) this.onResourceChange(this.resources);
+                    this.render(this.resources, this.tasks);
+                }
+            };
+        }
+
+        // Delete Resource button
+        this.container.querySelectorAll('[data-action="delete-resource"]').forEach(btn => {
+            btn.onclick = () => {
+                const id = btn.getAttribute('data-id');
+                this.resources = this.resources.filter(r => r.id !== id);
+                if (this.onResourceChange) this.onResourceChange(this.resources);
+                this.render(this.resources, this.tasks);
+            };
+        });
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+}
+
+
+// --- Module: js/views/calendarModalView.js ---
+/**
+ * Calendar Modal View: Configures Weekly Off Days, Festive Holidays & Overtime Working Days
+ */
+
+class CalendarModalView {
+    constructor(modalContainer, onCalendarChange) {
+        this.container = modalContainer;
+        this.onCalendarChange = onCalendarChange;
+        this.calendar = null;
+    }
+
+    render(calendar) {
+        if (!this.container) return;
+        this.calendar = calendar;
+
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        const html = `
+            <div id="calendar-modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
+                    
+                    <!-- Modal Header -->
+                    <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <h3 class="font-bold text-base">Project Calendar & Working Days Config</h3>
+                        </div>
+                        <button id="modal-close-btn" class="text-slate-400 hover:text-white transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Modal Body -->
+                    <div class="p-6 space-y-6 text-xs text-slate-700 max-h-[80vh] overflow-y-auto">
+                        
+                        <!-- 1. Weekly Off / Working Days -->
+                        <div class="space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <h4 class="font-bold text-slate-800 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+                                📅 Standard Weekly Working Days
+                            </h4>
+                            <p class="text-slate-500 text-[11px]">Select standard working days for task scheduling (unchecked days are weekly offs):</p>
+                            
+                            <div class="grid grid-cols-2 md:grid-cols-7 gap-2 pt-2">
+                                ${dayNames.map((name, idx) => {
+                                    const isChecked = (this.calendar.workingDays || [1,2,3,4,5]).includes(idx);
+                                    return `
+                                        <label class="flex items-center gap-1.5 p-2 rounded border ${isChecked ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-semibold' : 'bg-white border-slate-200 text-slate-500'} cursor-pointer transition">
+                                            <input type="checkbox" data-day="${idx}" ${isChecked ? 'checked' : ''} class="weekly-day-checkbox rounded text-indigo-600 focus:ring-indigo-500">
+                                            <span>${name.substr(0,3)}</span>
+                                        </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- 2. Festive & Company Holidays -->
+                        <div class="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <h4 class="font-bold text-slate-800 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+                                🌴 Festive & Company Holidays
+                            </h4>
+                            <p class="text-slate-500 text-[11px]">Tasks will automatically skip these non-working dates:</p>
+
+                            <!-- Add Holiday Form -->
+                            <div class="flex items-center gap-2 pt-1">
+                                <input type="date" id="new-holiday-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <input type="text" id="new-holiday-name" placeholder="Holiday Name (e.g. Diwali)" class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <button id="btn-add-holiday" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium shadow-sm transition">
+                                    + Add Holiday
+                                </button>
+                            </div>
+
+                            <!-- Holidays Table -->
+                            <div class="border border-slate-200 rounded overflow-hidden bg-white max-h-36 overflow-y-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-slate-100 border-b border-slate-200 font-semibold text-slate-600">
+                                        <tr>
+                                            <th class="p-2 border-r border-slate-200">Date</th>
+                                            <th class="p-2 border-r border-slate-200">Holiday Name</th>
+                                            <th class="p-2 w-12 text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        ${(this.calendar.holidays || []).length === 0 ? `
+                                            <tr><td colspan="3" class="p-3 text-center text-slate-400 italic">No holidays configured</td></tr>
+                                        ` : (this.calendar.holidays || []).map((h, i) => `
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="p-2 font-mono font-bold text-slate-800 border-r border-slate-100">${h.date}</td>
+                                                <td class="p-2 border-r border-slate-100">${this.escapeHtml(h.name)}</td>
+                                                <td class="p-2 text-center">
+                                                    <button data-action="delete-holiday" data-index="${i}" class="text-red-600 hover:text-red-800 font-bold">✕</button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 3. Overtime Exception Working Days -->
+                        <div class="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <h4 class="font-bold text-slate-800 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+                                ⚡ Overtime / Weekend Working Days
+                            </h4>
+                            <p class="text-slate-500 text-[11px]">Specify weekend/off dates where overtime work takes place (e.g. EVT build Saturday):</p>
+
+                            <!-- Add Overtime Form -->
+                            <div class="flex items-center gap-2 pt-1">
+                                <input type="date" id="new-overtime-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <input type="text" id="new-overtime-note" placeholder="Note (e.g. EVT Spin Crunch Saturday)" class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <button id="btn-add-overtime" class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium shadow-sm transition">
+                                    + Add Overtime
+                                </button>
+                            </div>
+
+                            <!-- Overtime Table -->
+                            <div class="border border-slate-200 rounded overflow-hidden bg-white max-h-36 overflow-y-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-amber-50 border-b border-amber-200 font-semibold text-amber-900">
+                                        <tr>
+                                            <th class="p-2 border-r border-amber-200">Date</th>
+                                            <th class="p-2 border-r border-amber-200">Note / Reason</th>
+                                            <th class="p-2 w-12 text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        ${(this.calendar.overtimeDays || []).length === 0 ? `
+                                            <tr><td colspan="3" class="p-3 text-center text-slate-400 italic">No overtime days configured</td></tr>
+                                        ` : (this.calendar.overtimeDays || []).map((o, i) => `
+                                            <tr class="hover:bg-amber-50/50">
+                                                <td class="p-2 font-mono font-bold text-amber-900 border-r border-slate-100">${o.date}</td>
+                                                <td class="p-2 border-r border-slate-100">${this.escapeHtml(o.note)}</td>
+                                                <td class="p-2 text-center">
+                                                    <button data-action="delete-overtime" data-index="${i}" class="text-red-600 hover:text-red-800 font-bold">✕</button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="px-6 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
+                        <span class="text-[11px] text-slate-500">Changes update project scheduling instantly.</span>
+                        <button id="modal-save-btn" class="px-5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs shadow transition">
+                            Apply Calendar Changes
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        `;
+
+        this.container.innerHTML = html;
+        this.attachEventListeners();
+    }
+
+    attachEventListeners() {
+        if (!this.container) return;
+
+        const closeBtn = this.container.querySelector('#modal-close-btn');
+        const saveBtn = this.container.querySelector('#modal-save-btn');
+        const backdrop = this.container.querySelector('#calendar-modal-backdrop');
+
+        const closeModal = () => {
+            this.container.innerHTML = '';
+        };
+
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (backdrop) {
+            backdrop.onclick = (e) => {
+                if (e.target === backdrop) closeModal();
+            };
+        }
+
+        // Apply changes
+        if (saveBtn) {
+            saveBtn.onclick = () => {
+                // Collect selected weekly working days
+                const selectedDays = [];
+                this.container.querySelectorAll('.weekly-day-checkbox').forEach(cb => {
+                    if (cb.checked) {
+                        selectedDays.push(parseInt(cb.getAttribute('data-day'), 10));
+                    }
+                });
+
+                this.calendar.workingDays = selectedDays;
+
+                if (this.onCalendarChange) {
+                    this.onCalendarChange(this.calendar);
+                }
+                closeModal();
+            };
+        }
+
+        // Add Holiday button
+        const addHolidayBtn = this.container.querySelector('#btn-add-holiday');
+        if (addHolidayBtn) {
+            addHolidayBtn.onclick = () => {
+                const dateInput = this.container.querySelector('#new-holiday-date');
+                const nameInput = this.container.querySelector('#new-holiday-name');
+                if (dateInput && nameInput && dateInput.value && nameInput.value.trim()) {
+                    this.calendar.holidays.push({
+                        date: dateInput.value,
+                        name: nameInput.value.trim()
+                    });
+                    this.render(this.calendar);
+                }
+            };
+        }
+
+        // Delete Holiday button
+        this.container.querySelectorAll('[data-action="delete-holiday"]').forEach(btn => {
+            btn.onclick = () => {
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                this.calendar.holidays.splice(idx, 1);
+                this.render(this.calendar);
+            };
+        });
+
+        // Add Overtime button
+        const addOvertimeBtn = this.container.querySelector('#btn-add-overtime');
+        if (addOvertimeBtn) {
+            addOvertimeBtn.onclick = () => {
+                const dateInput = this.container.querySelector('#new-overtime-date');
+                const noteInput = this.container.querySelector('#new-overtime-note');
+                if (dateInput && noteInput && dateInput.value && noteInput.value.trim()) {
+                    this.calendar.overtimeDays.push({
+                        date: dateInput.value,
+                        note: noteInput.value.trim()
+                    });
+                    this.render(this.calendar);
+                }
+            };
+        }
+
+        // Delete Overtime button
+        this.container.querySelectorAll('[data-action="delete-overtime"]').forEach(btn => {
+            btn.onclick = () => {
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                this.calendar.overtimeDays.splice(idx, 1);
+                this.render(this.calendar);
+            };
+        });
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+}
+
+
 // --- Module: js/storage/projectStore.js ---
 /**
- * Project Store: Persistence in LocalStorage, Custom .prj File Import/Export, and Sample Presets
+ * Project Store: LocalStorage Persistence, Custom .prj File Import/Export, Calendar & Resources Storage
  */
+
+
 
 
 
@@ -1684,15 +2290,17 @@ const STORAGE_KEY = 'hardware_pm_project_data';
 class ProjectStore {
     
     /**
-     * Auto-save current tasks to LocalStorage
+     * Auto-save current tasks, resources, and calendar to LocalStorage
      */
-    static saveToLocalStorage(projectTitle, tasks) {
+    static saveToLocalStorage(projectTitle, tasks, resources, calendar) {
         try {
             const payload = {
-                version: '1.0',
+                version: '1.1',
                 title: projectTitle || 'Hardware Project',
                 updatedAt: new Date().toISOString(),
-                tasks: tasks
+                tasks: tasks,
+                resources: resources,
+                calendar: calendar
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch (e) {
@@ -1701,7 +2309,7 @@ class ProjectStore {
     }
 
     /**
-     * Load tasks from LocalStorage
+     * Load tasks, resources, and calendar from LocalStorage
      */
     static loadFromLocalStorage() {
         try {
@@ -1710,7 +2318,9 @@ class ProjectStore {
             const data = JSON.parse(raw);
             return {
                 title: data.title || 'Hardware Project',
-                tasks: (data.tasks || []).map(t => new Task(t))
+                tasks: (data.tasks || []).map(t => new Task(t)),
+                resources: (data.resources || []).map(r => new Resource(r)),
+                calendar: new ProjectCalendar(data.calendar || {})
             };
         } catch (e) {
             console.error('Failed to load from localStorage:', e);
@@ -1721,15 +2331,17 @@ class ProjectStore {
     /**
      * Export project file as .prj (JSON format)
      */
-    static exportProjectFile(projectTitle, tasks) {
+    static exportProjectFile(projectTitle, tasks, resources, calendar) {
         const payload = {
             appName: 'Antigravity Hardware PM',
             fileFormat: 'hardware_pm_prj',
-            version: '1.0',
+            version: '1.1',
             exportedAt: new Date().toISOString(),
             project: {
                 title: projectTitle || 'Hardware R&D Project',
-                tasks: tasks
+                tasks: tasks,
+                resources: resources,
+                calendar: calendar
             }
         };
 
@@ -1754,21 +2366,30 @@ class ProjectStore {
         try {
             const data = JSON.parse(jsonContent);
             let rawTasks = [];
+            let rawResources = [];
+            let rawCalendar = {};
 
-            if (data.project && Array.isArray(data.project.tasks)) {
-                rawTasks = data.project.tasks;
-            } else if (Array.isArray(data.tasks)) {
-                rawTasks = data.tasks;
+            if (data.project) {
+                rawTasks = data.project.tasks || [];
+                rawResources = data.project.resources || [];
+                rawCalendar = data.project.calendar || {};
             } else {
-                throw new Error('Invalid .prj file format');
+                rawTasks = data.tasks || [];
+                rawResources = data.resources || [];
+                rawCalendar = data.calendar || {};
             }
 
             const tasks = rawTasks.map(t => new Task(t));
-            DependencyEngine.scheduleProject(tasks);
+            const resources = rawResources.length > 0 ? rawResources.map(r => new Resource(r)) : DEFAULT_RESOURCES;
+            const calendar = new ProjectCalendar(rawCalendar);
+
+            DependencyEngine.scheduleProject(tasks, calendar);
 
             return {
                 title: (data.project && data.project.title) || data.title || 'Imported Project',
-                tasks: tasks
+                tasks: tasks,
+                resources: resources,
+                calendar: calendar
             };
         } catch (e) {
             alert('Failed to parse .prj file. Please ensure it is a valid project file.');
@@ -1781,36 +2402,37 @@ class ProjectStore {
      */
     static getSamplePreset(presetId = 'iot_device') {
         const today = new Date().toISOString().split('T')[0];
+        const calendar = new ProjectCalendar();
+        const resources = DEFAULT_RESOURCES;
         let tasks = [];
 
         if (presetId === 'iot_device') {
             tasks = [
                 // Concept Phase
-                new Task({ name: 'System Architecture & Specs', stage: 'Concept', workstream: 'HW', duration: 5, start: DependencyEngine.addWorkingDays(today, 0), status: 'Complete', progress: 100 }),
-                new Task({ name: 'Component Selection & BOM Costing', stage: 'Concept', workstream: 'PROC', duration: 4, predecessors: '1FS', status: 'Complete', progress: 100 }),
+                new Task({ name: 'System Architecture & Specs', stage: 'Concept', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 5, start: DependencyEngine.addWorkingDays(today, 0, calendar), status: 'Complete', progress: 100 }),
+                new Task({ name: 'Component Selection & BOM Costing', stage: 'Concept', workstream: 'PROC', assignedTo: 'David Kim', duration: 4, predecessors: '1FS', status: 'Complete', progress: 100 }),
 
-                // EVT Phase (Engineering Verification Test)
+                // EVT Phase
                 new Task({ name: 'EVT Phase - Prototype Spin', stage: 'EVT', workstream: 'HW', duration: 25, isSummary: true, expanded: true }),
-                new Task({ name: 'Schematic Capture (MCU + Sensors)', stage: 'EVT', workstream: 'EE', duration: 6, parentId: null, predecessors: '2FS', status: 'In Design', progress: 80 }),
-                new Task({ name: 'PCB Layout & Stackup Design', stage: 'EVT', workstream: 'EE', duration: 7, predecessors: '4FS', status: 'In Design', progress: 40 }),
-                new Task({ name: 'PCB Fab & Assembly (Vendor Lead Time)', stage: 'EVT', workstream: 'PROC', duration: 10, leadTime: 7, vendor: 'JLCPCB Vendor', predecessors: '5FS', status: 'In Fab' }),
-                new Task({ name: '3D Enclosure CAD Design', stage: 'EVT', workstream: 'ME', duration: 8, predecessors: '4SS+2d', status: 'In Design', progress: 60 }),
-                new Task({ name: 'SLA 3D Prototype Printing', stage: 'EVT', workstream: 'ME', duration: 3, predecessors: '7FS', status: 'Not Started' }),
-                new Task({ name: 'Firmware Board Support Package (BSP)', stage: 'EVT', workstream: 'FW', duration: 10, predecessors: '4SS+3d', status: 'In Design', progress: 50 }),
-                new Task({ name: 'EVT 1st Article Assembly & Bring-Up', stage: 'EVT', workstream: 'HW', duration: 4, predecessors: '6FS, 8FS, 9FS', status: 'Not Started' }),
-                new Task({ name: 'EVT Milestone Gate Passed', stage: 'EVT', workstream: 'HW', duration: 0, isMilestone: true, predecessors: '10FS', status: 'Not Started' }),
+                new Task({ name: 'Schematic Capture (MCU + Sensors)', stage: 'EVT', workstream: 'EE', assignedTo: 'Alex Rivera', duration: 6, predecessors: '2FS', status: 'In Design', progress: 80 }),
+                new Task({ name: 'PCB Layout & Stackup Design', stage: 'EVT', workstream: 'EE', assignedTo: 'Alex Rivera', duration: 7, predecessors: '4FS', status: 'In Design', progress: 40 }),
+                new Task({ name: 'PCB Fab & Assembly (Vendor Lead Time)', stage: 'EVT', workstream: 'PROC', assignedTo: 'David Kim', duration: 10, leadTime: 7, vendor: 'JLCPCB Vendor', predecessors: '5FS', status: 'In Fab' }),
+                new Task({ name: '3D Enclosure CAD Design', stage: 'EVT', workstream: 'ME', assignedTo: 'Marcus Vance', duration: 8, predecessors: '4SS+2d', status: 'In Design', progress: 60 }),
+                new Task({ name: 'SLA 3D Prototype Printing', stage: 'EVT', workstream: 'ME', assignedTo: 'Marcus Vance', duration: 3, predecessors: '7FS', status: 'Not Started' }),
+                new Task({ name: 'Firmware Board Support Package (BSP)', stage: 'EVT', workstream: 'FW', assignedTo: 'Sarah Chen', duration: 10, predecessors: '4SS+3d', status: 'In Design', progress: 50 }),
+                new Task({ name: 'EVT 1st Article Assembly & Bring-Up', stage: 'EVT', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 4, predecessors: '6FS, 8FS, 9FS', status: 'Not Started' }),
+                new Task({ name: 'EVT Milestone Gate Passed', stage: 'EVT', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 0, isMilestone: true, predecessors: '10FS', status: 'Not Started' }),
 
-                // DVT Phase (Design Verification Test)
+                // DVT Phase
                 new Task({ name: 'DVT Phase - Compliance & Tooling', stage: 'DVT', workstream: 'HW', duration: 30, isSummary: true, expanded: true }),
-                new Task({ name: 'Injection Mold Tooling Fabrication', stage: 'DVT', workstream: 'ME', duration: 20, leadTime: 14, vendor: 'Precision Molds Inc', predecessors: '11FS', status: 'Not Started' }),
-                new Task({ name: 'Board Spin Rev B (RF Optimization)', stage: 'DVT', workstream: 'EE', duration: 8, predecessors: '11FS', status: 'Not Started' }),
-                new Task({ name: 'FCC / CE Pre-Compliance Testing', stage: 'DVT', workstream: 'TEST', duration: 7, predecessors: '13FS, 14FS', status: 'Not Started' }),
-                new Task({ name: 'Firmware Feature Release v1.0', stage: 'DVT', workstream: 'FW', duration: 15, predecessors: '9FS', status: 'Not Started' }),
-                new Task({ name: 'DVT Golden Sample Sign-Off', stage: 'DVT', workstream: 'HW', duration: 0, isMilestone: true, predecessors: '15FS, 16FS', status: 'Not Started' })
+                new Task({ name: 'Injection Mold Tooling Fabrication', stage: 'DVT', workstream: 'ME', assignedTo: 'Marcus Vance', duration: 20, leadTime: 14, vendor: 'Precision Molds Inc', predecessors: '11FS', status: 'Not Started' }),
+                new Task({ name: 'Board Spin Rev B (RF Optimization)', stage: 'DVT', workstream: 'EE', assignedTo: 'Alex Rivera', duration: 8, predecessors: '11FS', status: 'Not Started' }),
+                new Task({ name: 'FCC / CE Pre-Compliance Testing', stage: 'DVT', workstream: 'TEST', assignedTo: 'Elena Rostova', duration: 7, predecessors: '13FS, 14FS', status: 'Not Started' }),
+                new Task({ name: 'Firmware Feature Release v1.0', stage: 'DVT', workstream: 'FW', assignedTo: 'Sarah Chen', duration: 15, predecessors: '9FS', status: 'Not Started' }),
+                new Task({ name: 'DVT Golden Sample Sign-Off', stage: 'DVT', workstream: 'HW', assignedTo: 'Priya Sharma', duration: 0, isMilestone: true, predecessors: '15FS, 16FS', status: 'Not Started' })
             ];
         }
 
-        // Parent assignments for subtasks in preset
         const evtSummary = tasks[2];
         tasks[3].parentId = evtSummary.id;
         tasks[4].parentId = evtSummary.id;
@@ -1828,15 +2450,14 @@ class ProjectStore {
         tasks[15].parentId = dvtSummary.id;
         tasks[16].parentId = dvtSummary.id;
 
-        // Schedule project tasks
-        DependencyEngine.scheduleProject(tasks);
-
-        // Capture initial baseline snapshot
+        DependencyEngine.scheduleProject(tasks, calendar);
         BaselineEngine.captureBaseline(tasks);
 
         return {
             title: 'IoT Tracker Hardware-Firmware Project',
-            tasks: tasks
+            tasks: tasks,
+            resources: resources,
+            calendar: calendar
         };
     }
 }
@@ -1844,14 +2465,14 @@ class ProjectStore {
 
 // --- Module: js/export/excelExporter.js ---
 /**
- * Excel Exporter Module: Multi-tab Excel (.xlsx) / CSV export for backward compatibility
+ * Excel Exporter Module: Multi-tab Excel (.xlsx) / CSV export including Tasks, Milestones, Resources, and Calendar
  */
 
 
 
 class ExcelExporter {
 
-    static exportToExcel(projectTitle, tasks) {
+    static exportToExcel(projectTitle, tasks, resources = [], calendar = {}) {
         if (!window.XLSX) {
             alert('SheetJS Excel library not loaded. Falling back to CSV export.');
             this.exportToCSV(projectTitle, tasks);
@@ -1866,6 +2487,7 @@ class ExcelExporter {
             'Activity Name': t.name,
             'Workstream': t.workstream,
             'Hardware Stage': t.stage,
+            'Assigned Engineer': t.assignedTo || 'Unassigned',
             'Status': t.status,
             'Duration (Days)': t.duration,
             'Start Date': t.start,
@@ -1873,10 +2495,8 @@ class ExcelExporter {
             'Predecessors': t.predecessors || '',
             'Procurement Lead (Days)': t.leadTime || 0,
             'Vendor': t.vendor || '',
-            'Assigned Engineer': t.assignedTo || '',
             'Progress (%)': t.progress || 0,
-            'Is Milestone': t.isMilestone ? 'YES' : 'NO',
-            'Is Summary': t.isSummary ? 'YES' : 'NO'
+            'Is Milestone': t.isMilestone ? 'YES' : 'NO'
         }));
 
         const wsWbs = window.XLSX.utils.json_to_sheet(wbsData);
@@ -1891,6 +2511,7 @@ class ExcelExporter {
                 'Milestone Name': m.name,
                 'Hardware Stage': m.stage,
                 'Workstream': m.workstream,
+                'Assigned Engineer': m.assignedTo || 'Unassigned',
                 'Target Date': m.finish || m.start,
                 'Baseline Date': (m.baseline && m.baseline.finish) || 'N/A',
                 'Variance': v.statusText,
@@ -1901,23 +2522,30 @@ class ExcelExporter {
         const wsMilestones = window.XLSX.utils.json_to_sheet(milestoneData);
         window.XLSX.utils.book_append_sheet(wb, wsMilestones, 'Milestones');
 
-        // Sheet 3: Baseline & Variance
-        const varianceData = tasks.map(t => {
-            const v = BaselineEngine.getVariance(t);
-            return {
-                'WBS': t.wbs,
-                'Activity Name': t.name,
-                'Current Start': t.start,
-                'Current Finish': t.finish,
-                'Baseline Start': (t.baseline && t.baseline.start) || 'N/A',
-                'Baseline Finish': (t.baseline && t.baseline.finish) || 'N/A',
-                'Finish Delay (Days)': v.finishVarianceDays,
-                'Status Callout': v.statusText
-            };
-        });
+        // Sheet 3: Resource Pool
+        const resData = resources.map(r => ({
+            'Resource ID': r.id,
+            'Engineer Name': r.name,
+            'Role': r.role,
+            'Primary Workstream': r.workstream,
+            'Capacity (%)': r.capacity
+        }));
 
-        const wsVariance = window.XLSX.utils.json_to_sheet(varianceData);
-        window.XLSX.utils.book_append_sheet(wb, wsVariance, 'Baseline Variance');
+        const wsRes = window.XLSX.utils.json_to_sheet(resData);
+        window.XLSX.utils.book_append_sheet(wb, wsRes, 'Team Resources');
+
+        // Sheet 4: Project Calendar & Holidays
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const workingDayNames = (calendar.workingDays || [1,2,3,4,5]).map(d => dayNames[d]).join(', ');
+
+        const calendarData = [
+            { 'Config Type': 'Standard Weekly Working Days', 'Details': workingDayNames },
+            ... (calendar.holidays || []).map(h => ({ 'Config Type': 'Festive / Company Holiday', 'Details': `${h.date}: ${h.name}` })),
+            ... (calendar.overtimeDays || []).map(o => ({ 'Config Type': 'Overtime Working Day', 'Details': `${o.date}: ${o.note}` }))
+        ];
+
+        const wsCal = window.XLSX.utils.json_to_sheet(calendarData);
+        window.XLSX.utils.book_append_sheet(wb, wsCal, 'Project Calendar');
 
         // Download Excel File
         const fileName = `${(projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_')}.xlsx`;
@@ -1925,12 +2553,13 @@ class ExcelExporter {
     }
 
     static exportToCSV(projectTitle, tasks) {
-        const headers = ['WBS', 'Activity Name', 'Workstream', 'Stage', 'Status', 'Duration', 'Start', 'Finish', 'Predecessors', 'LeadTime', 'Progress'];
+        const headers = ['WBS', 'Activity Name', 'Workstream', 'Stage', 'Assigned Engineer', 'Status', 'Duration', 'Start', 'Finish', 'Predecessors', 'LeadTime', 'Progress'];
         const rows = tasks.map(t => [
             `"${t.wbs}"`,
             `"${t.name.replace(/"/g, '""')}"`,
             `"${t.workstream}"`,
             `"${t.stage}"`,
+            `"${t.assignedTo || ''}"`,
             `"${t.status}"`,
             t.duration,
             `"${t.start}"`,
@@ -1987,6 +2616,7 @@ class PrintEngine {
 }
 
 
+
 // --- Module: js/app.js ---
 /**
  * Main Application Bootstrap & State Controller for Hardware PM Tool
@@ -2002,17 +2632,26 @@ class PrintEngine {
 
 
 
+
+
+
+
 class HardwarePMApp {
     constructor() {
         this.projectTitle = 'Hardware & Firmware R&D Project';
         this.tasks = [];
-        this.activeView = 'split'; // 'split' or 'milestones'
+        this.resources = DEFAULT_RESOURCES;
+        this.calendar = new ProjectCalendar();
+
+        this.activeView = 'split'; // 'split', 'resources', or 'milestones'
         this.selectedTaskId = null;
 
         // View Instances
         this.wbsView = null;
         this.ganttView = null;
         this.milestonesView = null;
+        this.resourceView = null;
+        this.calendarModalView = null;
     }
 
     init() {
@@ -2023,24 +2662,39 @@ class HardwarePMApp {
         if (saved && saved.tasks && saved.tasks.length > 0) {
             this.projectTitle = saved.title;
             this.tasks = saved.tasks;
+            if (saved.resources && saved.resources.length > 0) this.resources = saved.resources;
+            if (saved.calendar) this.calendar = saved.calendar;
         } else {
             const preset = ProjectStore.getSamplePreset('iot_device');
             this.projectTitle = preset.title;
             this.tasks = preset.tasks;
+            this.resources = preset.resources;
+            this.calendar = preset.calendar;
         }
 
         // Initialize Engine & View Components
-        DependencyEngine.scheduleProject(this.tasks);
+        DependencyEngine.scheduleProject(this.tasks, this.calendar);
 
         const wbsContainer = document.getElementById('wbs-pane');
         const ganttContainer = document.getElementById('gantt-pane');
         const milestonesContainer = document.getElementById('milestones-view-container');
+        const resourceContainer = document.getElementById('resource-view-container');
+        const calendarModalContainer = document.getElementById('calendar-modal-container');
 
         this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
         this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
         this.milestonesView = new MilestonesView(milestonesContainer);
+        this.resourceView = new ResourceView(resourceContainer, (updatedRes) => {
+            this.resources = updatedRes;
+            this.renderAllViews();
+        });
+        this.calendarModalView = new CalendarModalView(calendarModalContainer, (updatedCal) => {
+            this.calendar = updatedCal;
+            DependencyEngine.scheduleProject(this.tasks, this.calendar);
+            this.renderAllViews();
+        });
 
-        // Bind DOM Events
+        // Bind DOM Controls & Splitter
         this.bindHeaderControls();
         this.initSplitPaneResizer();
 
@@ -2071,21 +2725,34 @@ class HardwarePMApp {
             }
         }
 
-        if (this.activeView === 'split') {
-            document.getElementById('split-view-container').style.display = 'flex';
-            document.getElementById('milestones-view-container').style.display = 'none';
+        // View Visibility Routing
+        const splitContainer = document.getElementById('split-view-container');
+        const milestonesContainer = document.getElementById('milestones-view-container');
+        const resourceContainer = document.getElementById('resource-view-container');
 
-            this.wbsView.render(this.tasks);
-            this.ganttView.render(this.tasks);
+        if (this.activeView === 'split') {
+            if (splitContainer) splitContainer.style.display = 'flex';
+            if (milestonesContainer) milestonesContainer.style.display = 'none';
+            if (resourceContainer) resourceContainer.style.display = 'none';
+
+            this.wbsView.render(this.tasks, this.resources);
+            this.ganttView.render(this.tasks, this.calendar);
+        } else if (this.activeView === 'resources') {
+            if (splitContainer) splitContainer.style.display = 'none';
+            if (milestonesContainer) milestonesContainer.style.display = 'none';
+            if (resourceContainer) resourceContainer.style.display = 'block';
+
+            this.resourceView.render(this.resources, this.tasks);
         } else {
-            document.getElementById('split-view-container').style.display = 'none';
-            document.getElementById('milestones-view-container').style.display = 'block';
+            if (splitContainer) splitContainer.style.display = 'none';
+            if (milestonesContainer) milestonesContainer.style.display = 'block';
+            if (resourceContainer) resourceContainer.style.display = 'none';
 
             this.milestonesView.render(this.tasks);
         }
 
         // Auto-save to LocalStorage
-        ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks);
+        ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks, this.resources, this.calendar);
     }
 
     handleTaskChange(taskId, actionOrField, value) {
@@ -2124,7 +2791,6 @@ class HardwarePMApp {
                 this.deleteTaskRecursive(taskId);
             }
         } else {
-            // Field edit (e.g. name, duration, start, predecessors, workstream, status)
             const task = this.tasks.find(t => t.id === taskId);
             if (task) {
                 task[actionOrField] = value;
@@ -2134,14 +2800,12 @@ class HardwarePMApp {
             }
         }
 
-        // Run Predecessor Engine & Schedule
-        DependencyEngine.scheduleProject(this.tasks);
+        DependencyEngine.scheduleProject(this.tasks, this.calendar);
         this.renderAllViews();
     }
 
     handleGanttUpdate(taskId) {
-        // Called when dates are modified via Gantt drag and drop
-        DependencyEngine.scheduleProject(this.tasks);
+        DependencyEngine.scheduleProject(this.tasks, this.calendar);
         this.renderAllViews();
     }
 
@@ -2187,34 +2851,45 @@ class HardwarePMApp {
     }
 
     bindHeaderControls() {
-        // Project Title Change
+        // Project Title
         const titleInput = document.getElementById('project-title-input');
         if (titleInput) {
             titleInput.onchange = (e) => {
                 this.projectTitle = e.target.value;
-                ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks);
+                ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks, this.resources, this.calendar);
             };
         }
 
-        // View Mode Toggle (Split View vs Milestones Roadmap)
+        // View Mode Switcher
         const btnSplit = document.getElementById('view-btn-split');
+        const btnResources = document.getElementById('view-btn-resources');
         const btnMilestones = document.getElementById('view-btn-milestones');
 
-        if (btnSplit) {
-            btnSplit.onclick = () => {
-                this.activeView = 'split';
-                btnSplit.className = 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm';
-                if (btnMilestones) btnMilestones.className = 'px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs';
-                this.renderAllViews();
-            };
-        }
+        const updateViewBtns = (active) => {
+            this.activeView = active;
+            [
+                { btn: btnSplit, name: 'split' },
+                { btn: btnResources, name: 'resources' },
+                { btn: btnMilestones, name: 'milestones' }
+            ].forEach(item => {
+                if (item.btn) {
+                    item.btn.className = item.name === active
+                        ? 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm'
+                        : 'px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs';
+                }
+            });
+            this.renderAllViews();
+        };
 
-        if (btnMilestones) {
-            btnMilestones.onclick = () => {
-                this.activeView = 'milestones';
-                btnMilestones.className = 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm';
-                if (btnSplit) btnSplit.className = 'px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs';
-                this.renderAllViews();
+        if (btnSplit) btnSplit.onclick = () => updateViewBtns('split');
+        if (btnResources) btnResources.onclick = () => updateViewBtns('resources');
+        if (btnMilestones) btnMilestones.onclick = () => updateViewBtns('milestones');
+
+        // Calendar Config Modal Trigger
+        const btnCalendarConfig = document.getElementById('btn-calendar-config');
+        if (btnCalendarConfig) {
+            btnCalendarConfig.onclick = () => {
+                this.calendarModalView.render(this.calendar);
             };
         }
 
@@ -2222,7 +2897,7 @@ class HardwarePMApp {
         const btnSetBaseline = document.getElementById('btn-set-baseline');
         if (btnSetBaseline) {
             btnSetBaseline.onclick = () => {
-                if (confirm('Set current project schedule as the target Baseline?')) {
+                if (confirm('Set current project schedule as target Baseline?')) {
                     BaselineEngine.captureBaseline(this.tasks);
                     this.renderAllViews();
                 }
@@ -2232,12 +2907,12 @@ class HardwarePMApp {
         // Import / Export Controls
         const btnExportPrj = document.getElementById('btn-export-prj');
         if (btnExportPrj) {
-            btnExportPrj.onclick = () => ProjectStore.exportProjectFile(this.projectTitle, this.tasks);
+            btnExportPrj.onclick = () => ProjectStore.exportProjectFile(this.projectTitle, this.tasks, this.resources, this.calendar);
         }
 
         const btnExportExcel = document.getElementById('btn-export-excel');
         if (btnExportExcel) {
-            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks);
+            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks, this.resources, this.calendar);
         }
 
         const btnImportPrj = document.getElementById('btn-import-prj');
@@ -2254,6 +2929,8 @@ class HardwarePMApp {
                         if (imported) {
                             this.projectTitle = imported.title;
                             this.tasks = imported.tasks;
+                            this.resources = imported.resources;
+                            this.calendar = imported.calendar;
                             this.renderAllViews();
                         }
                     };
@@ -2272,6 +2949,8 @@ class HardwarePMApp {
                         const preset = ProjectStore.getSamplePreset(presetId);
                         this.projectTitle = preset.title;
                         this.tasks = preset.tasks;
+                        this.resources = preset.resources;
+                        this.calendar = preset.calendar;
                         this.renderAllViews();
                     }
                     e.target.value = '';
@@ -2325,7 +3004,6 @@ class HardwarePMApp {
     }
 }
 
-// Bootstrap App when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new HardwarePMApp();
     window.app.init();

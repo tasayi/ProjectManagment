@@ -24,7 +24,7 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
                 <span>Hardware PM</span>
             </div>
-            <input type="text" id="project-title-input" value="Hardware & Firmware R&D Project" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-64 md:w-80 transition" title="Click to rename project">
+            <input type="text" id="project-title-input" value="Hardware & Firmware R&D Project" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-60 md:w-72 transition" title="Click to rename project">
         </div>
 
         <!-- Center View Switcher & Baseline KPI Summary -->
@@ -32,21 +32,28 @@
             <!-- View Switcher -->
             <div class="bg-slate-800 p-1 rounded-md flex items-center gap-1 border border-slate-700 text-xs">
                 <button id="view-btn-split" class="px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm">Grid & Gantt</button>
+                <button id="view-btn-resources" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Engineer Workload</button>
                 <button id="view-btn-milestones" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Milestone Roadmap</button>
             </div>
 
             <!-- Baseline KPI Status Badge -->
-            <div id="header-baseline-kpi" class="px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
+            <div id="header-baseline-kpi" class="hidden md:block px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
                 Baseline: Not Set
             </div>
         </div>
 
-        <!-- Right Toolbar Actions: Baseline, File Save, Export, Print -->
+        <!-- Right Toolbar Actions: Calendar Config, Baseline, File Save, Export, Print -->
         <div class="flex items-center gap-2">
+            <!-- Calendar Config Button -->
+            <button id="btn-calendar-config" class="px-2.5 py-1 bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-700 text-indigo-200 rounded font-medium text-xs flex items-center gap-1.5 transition shadow-sm" title="Configure Working Days, Festive Holidays & Overtime Days">
+                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span>Calendar</span>
+            </button>
+
             <!-- Set Baseline -->
             <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Snapshot current schedule as baseline">
                 <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                Set Baseline
+                Baseline
             </button>
 
             <!-- Export .prj -->
@@ -65,12 +72,12 @@
             <!-- Export Excel -->
             <button id="btn-export-excel" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition" title="Export to Excel (.xlsx) for backward compatibility">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Excel Export
+                Excel
             </button>
 
             <!-- Presets Select -->
             <select id="preset-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
-                <option value="">Load Preset...</option>
+                <option value="">Presets...</option>
                 <option value="iot_device">IoT Tracker (HW + PCB + FW)</option>
             </select>
 
@@ -90,7 +97,7 @@
 
         <!-- Split View (Grid + Gantt) -->
         <div id="split-view-container" class="w-full h-full flex overflow-hidden">
-            <!-- Left Pane: WBS Grid (Default width: 50%) -->
+            <!-- Left Pane: WBS Grid -->
             <div id="wbs-pane" style="width: 50%; min-width: 340px;" class="h-full flex-shrink-0"></div>
 
             <!-- Draggable Split Resizer Bar -->
@@ -100,8 +107,14 @@
             <div id="gantt-pane" class="flex-1 h-full overflow-hidden"></div>
         </div>
 
+        <!-- Resource Pool & Workload Heatmap View (Initially Hidden) -->
+        <div id="resource-view-container" class="w-full h-full hidden overflow-auto"></div>
+
         <!-- Milestone Executive Roadmap View (Initially Hidden) -->
         <div id="milestones-view-container" class="w-full h-full hidden overflow-auto"></div>
+
+        <!-- Calendar Config Modal Container -->
+        <div id="calendar-modal-container"></div>
 
     </main>
 
@@ -109,4 +122,3 @@
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
-

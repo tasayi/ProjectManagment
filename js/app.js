@@ -3,11 +3,15 @@
  */
 
 import { Task } from './models/taskModel.js';
+import { Resource, DEFAULT_RESOURCES } from './models/resourceModel.js';
+import { ProjectCalendar } from './models/calendarModel.js';
 import { DependencyEngine } from './engine/dependencyEngine.js';
 import { BaselineEngine } from './engine/baselineEngine.js';
 import { WbsGridView } from './views/wbsGridView.js';
 import { GanttView } from './views/ganttView.js';
 import { MilestonesView } from './views/milestonesView.js';
+import { ResourceView } from './views/resourceView.js';
+import { CalendarModalView } from './views/calendarModalView.js';
 import { ProjectStore } from './storage/projectStore.js';
 import { ExcelExporter } from './export/excelExporter.js';
 import { PrintEngine } from './export/printEngine.js';
@@ -16,13 +20,18 @@ class HardwarePMApp {
     constructor() {
         this.projectTitle = 'Hardware & Firmware R&D Project';
         this.tasks = [];
-        this.activeView = 'split'; // 'split' or 'milestones'
+        this.resources = DEFAULT_RESOURCES;
+        this.calendar = new ProjectCalendar();
+
+        this.activeView = 'split'; // 'split', 'resources', or 'milestones'
         this.selectedTaskId = null;
 
         // View Instances
         this.wbsView = null;
         this.ganttView = null;
         this.milestonesView = null;
+        this.resourceView = null;
+        this.calendarModalView = null;
     }
 
     init() {
@@ -33,24 +42,39 @@ class HardwarePMApp {
         if (saved && saved.tasks && saved.tasks.length > 0) {
             this.projectTitle = saved.title;
             this.tasks = saved.tasks;
+            if (saved.resources && saved.resources.length > 0) this.resources = saved.resources;
+            if (saved.calendar) this.calendar = saved.calendar;
         } else {
             const preset = ProjectStore.getSamplePreset('iot_device');
             this.projectTitle = preset.title;
             this.tasks = preset.tasks;
+            this.resources = preset.resources;
+            this.calendar = preset.calendar;
         }
 
         // Initialize Engine & View Components
-        DependencyEngine.scheduleProject(this.tasks);
+        DependencyEngine.scheduleProject(this.tasks, this.calendar);
 
         const wbsContainer = document.getElementById('wbs-pane');
         const ganttContainer = document.getElementById('gantt-pane');
         const milestonesContainer = document.getElementById('milestones-view-container');
+        const resourceContainer = document.getElementById('resource-view-container');
+        const calendarModalContainer = document.getElementById('calendar-modal-container');
 
         this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
         this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
         this.milestonesView = new MilestonesView(milestonesContainer);
+        this.resourceView = new ResourceView(resourceContainer, (updatedRes) => {
+            this.resources = updatedRes;
+            this.renderAllViews();
+        });
+        this.calendarModalView = new CalendarModalView(calendarModalContainer, (updatedCal) => {
+            this.calendar = updatedCal;
+            DependencyEngine.scheduleProject(this.tasks, this.calendar);
+            this.renderAllViews();
+        });
 
-        // Bind DOM Events
+        // Bind DOM Controls & Splitter
         this.bindHeaderControls();
         this.initSplitPaneResizer();
 
@@ -81,21 +105,34 @@ class HardwarePMApp {
             }
         }
 
-        if (this.activeView === 'split') {
-            document.getElementById('split-view-container').style.display = 'flex';
-            document.getElementById('milestones-view-container').style.display = 'none';
+        // View Visibility Routing
+        const splitContainer = document.getElementById('split-view-container');
+        const milestonesContainer = document.getElementById('milestones-view-container');
+        const resourceContainer = document.getElementById('resource-view-container');
 
-            this.wbsView.render(this.tasks);
-            this.ganttView.render(this.tasks);
+        if (this.activeView === 'split') {
+            if (splitContainer) splitContainer.style.display = 'flex';
+            if (milestonesContainer) milestonesContainer.style.display = 'none';
+            if (resourceContainer) resourceContainer.style.display = 'none';
+
+            this.wbsView.render(this.tasks, this.resources);
+            this.ganttView.render(this.tasks, this.calendar);
+        } else if (this.activeView === 'resources') {
+            if (splitContainer) splitContainer.style.display = 'none';
+            if (milestonesContainer) milestonesContainer.style.display = 'none';
+            if (resourceContainer) resourceContainer.style.display = 'block';
+
+            this.resourceView.render(this.resources, this.tasks);
         } else {
-            document.getElementById('split-view-container').style.display = 'none';
-            document.getElementById('milestones-view-container').style.display = 'block';
+            if (splitContainer) splitContainer.style.display = 'none';
+            if (milestonesContainer) milestonesContainer.style.display = 'block';
+            if (resourceContainer) resourceContainer.style.display = 'none';
 
             this.milestonesView.render(this.tasks);
         }
 
         // Auto-save to LocalStorage
-        ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks);
+        ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks, this.resources, this.calendar);
     }
 
     handleTaskChange(taskId, actionOrField, value) {
@@ -134,7 +171,6 @@ class HardwarePMApp {
                 this.deleteTaskRecursive(taskId);
             }
         } else {
-            // Field edit (e.g. name, duration, start, predecessors, workstream, status)
             const task = this.tasks.find(t => t.id === taskId);
             if (task) {
                 task[actionOrField] = value;
@@ -144,14 +180,12 @@ class HardwarePMApp {
             }
         }
 
-        // Run Predecessor Engine & Schedule
-        DependencyEngine.scheduleProject(this.tasks);
+        DependencyEngine.scheduleProject(this.tasks, this.calendar);
         this.renderAllViews();
     }
 
     handleGanttUpdate(taskId) {
-        // Called when dates are modified via Gantt drag and drop
-        DependencyEngine.scheduleProject(this.tasks);
+        DependencyEngine.scheduleProject(this.tasks, this.calendar);
         this.renderAllViews();
     }
 
@@ -197,34 +231,45 @@ class HardwarePMApp {
     }
 
     bindHeaderControls() {
-        // Project Title Change
+        // Project Title
         const titleInput = document.getElementById('project-title-input');
         if (titleInput) {
             titleInput.onchange = (e) => {
                 this.projectTitle = e.target.value;
-                ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks);
+                ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks, this.resources, this.calendar);
             };
         }
 
-        // View Mode Toggle (Split View vs Milestones Roadmap)
+        // View Mode Switcher
         const btnSplit = document.getElementById('view-btn-split');
+        const btnResources = document.getElementById('view-btn-resources');
         const btnMilestones = document.getElementById('view-btn-milestones');
 
-        if (btnSplit) {
-            btnSplit.onclick = () => {
-                this.activeView = 'split';
-                btnSplit.className = 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm';
-                if (btnMilestones) btnMilestones.className = 'px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs';
-                this.renderAllViews();
-            };
-        }
+        const updateViewBtns = (active) => {
+            this.activeView = active;
+            [
+                { btn: btnSplit, name: 'split' },
+                { btn: btnResources, name: 'resources' },
+                { btn: btnMilestones, name: 'milestones' }
+            ].forEach(item => {
+                if (item.btn) {
+                    item.btn.className = item.name === active
+                        ? 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm'
+                        : 'px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs';
+                }
+            });
+            this.renderAllViews();
+        };
 
-        if (btnMilestones) {
-            btnMilestones.onclick = () => {
-                this.activeView = 'milestones';
-                btnMilestones.className = 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm';
-                if (btnSplit) btnSplit.className = 'px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs';
-                this.renderAllViews();
+        if (btnSplit) btnSplit.onclick = () => updateViewBtns('split');
+        if (btnResources) btnResources.onclick = () => updateViewBtns('resources');
+        if (btnMilestones) btnMilestones.onclick = () => updateViewBtns('milestones');
+
+        // Calendar Config Modal Trigger
+        const btnCalendarConfig = document.getElementById('btn-calendar-config');
+        if (btnCalendarConfig) {
+            btnCalendarConfig.onclick = () => {
+                this.calendarModalView.render(this.calendar);
             };
         }
 
@@ -232,7 +277,7 @@ class HardwarePMApp {
         const btnSetBaseline = document.getElementById('btn-set-baseline');
         if (btnSetBaseline) {
             btnSetBaseline.onclick = () => {
-                if (confirm('Set current project schedule as the target Baseline?')) {
+                if (confirm('Set current project schedule as target Baseline?')) {
                     BaselineEngine.captureBaseline(this.tasks);
                     this.renderAllViews();
                 }
@@ -242,12 +287,12 @@ class HardwarePMApp {
         // Import / Export Controls
         const btnExportPrj = document.getElementById('btn-export-prj');
         if (btnExportPrj) {
-            btnExportPrj.onclick = () => ProjectStore.exportProjectFile(this.projectTitle, this.tasks);
+            btnExportPrj.onclick = () => ProjectStore.exportProjectFile(this.projectTitle, this.tasks, this.resources, this.calendar);
         }
 
         const btnExportExcel = document.getElementById('btn-export-excel');
         if (btnExportExcel) {
-            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks);
+            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks, this.resources, this.calendar);
         }
 
         const btnImportPrj = document.getElementById('btn-import-prj');
@@ -264,6 +309,8 @@ class HardwarePMApp {
                         if (imported) {
                             this.projectTitle = imported.title;
                             this.tasks = imported.tasks;
+                            this.resources = imported.resources;
+                            this.calendar = imported.calendar;
                             this.renderAllViews();
                         }
                     };
@@ -282,6 +329,8 @@ class HardwarePMApp {
                         const preset = ProjectStore.getSamplePreset(presetId);
                         this.projectTitle = preset.title;
                         this.tasks = preset.tasks;
+                        this.resources = preset.resources;
+                        this.calendar = preset.calendar;
                         this.renderAllViews();
                     }
                     e.target.value = '';
@@ -335,9 +384,7 @@ class HardwarePMApp {
     }
 }
 
-// Bootstrap App when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new HardwarePMApp();
     window.app.init();
 });
-

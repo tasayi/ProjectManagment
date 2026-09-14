@@ -1,42 +1,41 @@
 /**
- * Gantt View Component: Interactive SVG Timeline, Dependency Lines, Baseline Ghost Bars, and Bidirectional Drag & Drop
+ * Gantt View Component: Interactive SVG Timeline, Dependency Lines, Baseline Ghost Bars, Calendar Off Days & Bidirectional Drag & Drop
  */
 
 import { WORKSTREAMS } from '../models/taskModel.js';
 import { DependencyEngine } from '../engine/dependencyEngine.js';
 import { BaselineEngine } from '../engine/baselineEngine.js';
+import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class GanttView {
     constructor(containerElement, onTaskUpdate) {
         this.container = containerElement;
-        this.onTaskUpdate = onTaskUpdate; // Callback when dates/durations are dragged
-        this.zoom = 'Week'; // Day, Week, Month
+        this.onTaskUpdate = onTaskUpdate;
+        this.zoom = 'Week';
         this.showCriticalPath = false;
         this.showBaselineGhost = true;
         this.dragState = null;
-        this.dayWidth = 28; // pixels per day (Week zoom)
-        this.rowHeight = 33; // pixels per task row
+        this.dayWidth = 28;
+        this.rowHeight = 33;
+        this.calendar = null;
     }
 
-    render(tasks) {
+    render(tasks, calendar) {
         if (!this.container) return;
 
         this.tasks = tasks;
+        this.calendar = calendar;
 
-        // Calculate timeline date bounds
         const bounds = this.getTimelineBounds(tasks);
         this.startDate = bounds.start;
         this.endDate = bounds.end;
-        this.totalDays = DependencyEngine.getWorkingDays(this.startDate, this.endDate) + 14;
+        this.totalDays = DependencyEngine.getWorkingDays(this.startDate, this.endDate, this.calendar) + 14;
 
-        // Set pixel width based on zoom level
         if (this.zoom === 'Day') this.dayWidth = 44;
         else if (this.zoom === 'Week') this.dayWidth = 28;
         else if (this.zoom === 'Month') this.dayWidth = 14;
 
         const timelineWidth = Math.max(800, this.totalDays * this.dayWidth);
-
-        // Filter visible tasks based on summary expansion
         const visibleTasks = this.getVisibleTasks(tasks);
 
         const html = `
@@ -76,7 +75,7 @@ export class GanttView {
 
                         <!-- Main Gantt SVG Layer -->
                         <div class="gantt-body relative" style="height: ${visibleTasks.length * this.rowHeight}px;">
-                            <!-- Grid Background Lines -->
+                            <!-- Grid Background Lines with Calendar Shading -->
                             ${this.renderGridLines(timelineWidth, visibleTasks.length)}
 
                             <!-- Predecessor Connector Lines SVG -->
@@ -122,7 +121,6 @@ export class GanttView {
             });
         }
 
-        // Add 7 days padding to bounds
         minDate.setDate(minDate.getDate() - 5);
         maxDate.setDate(maxDate.getDate() + 14);
 
@@ -166,10 +164,27 @@ export class GanttView {
             const dateStr = curr.toISOString().split('T')[0];
             const monthName = curr.toLocaleString('default', { month: 'short', year: 'numeric' });
             const dayNum = curr.getDate();
-            const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+
+            const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
+            const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
+            const isWorking = CalendarEngine.isWorkingDay(dateStr, this.calendar);
+
+            let bgClass = 'bg-white text-slate-700 font-semibold';
+            let titleAttr = '';
+
+            if (isOvertime) {
+                bgClass = 'bg-amber-200 text-amber-900 font-bold';
+                titleAttr = `Overtime: ${isOvertime.note}`;
+            } else if (isHoliday) {
+                bgClass = 'bg-red-200 text-red-900 font-bold';
+                titleAttr = `Holiday: ${isHoliday.name}`;
+            } else if (!isWorking) {
+                bgClass = 'bg-slate-200/70 text-slate-400 font-normal';
+                titleAttr = 'Weekly Off';
+            }
 
             daysHtml.push(`
-                <div style="width: ${this.dayWidth}px;" class="flex-shrink-0 text-center py-1 border-r border-slate-200 text-[10px] ${isWeekend ? 'bg-slate-200/50 text-slate-400 font-normal' : 'text-slate-600 font-semibold'}">
+                <div style="width: ${this.dayWidth}px;" class="flex-shrink-0 text-center py-1 border-r border-slate-200 text-[10px] ${bgClass}" title="${titleAttr}">
                     ${dayNum}
                 </div>
             `);
@@ -203,9 +218,22 @@ export class GanttView {
         const end = new Date(this.endDate);
 
         while (curr <= end) {
-            const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+            const dateStr = curr.toISOString().split('T')[0];
+            const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
+            const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
+            const isWorking = CalendarEngine.isWorkingDay(dateStr, this.calendar);
+
+            let bgClass = '';
+            if (isOvertime) {
+                bgClass = 'bg-amber-50/50';
+            } else if (isHoliday) {
+                bgClass = 'bg-red-50/40';
+            } else if (!isWorking) {
+                bgClass = 'bg-slate-100/70';
+            }
+
             columns.push(`
-                <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${isWeekend ? 'bg-slate-50/70' : ''}"></div>
+                <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${bgClass}"></div>
             `);
             curr.setDate(curr.getDate() + 1);
         }
@@ -242,7 +270,6 @@ export class GanttView {
         const isCritical = this.showCriticalPath && task.isCritical;
         const variance = BaselineEngine.getVariance(task);
 
-        // Baseline Ghost Bar calculations
         let baselineGhostHtml = '';
         if (this.showBaselineGhost && task.baseline && task.baseline.start && task.baseline.finish) {
             const bx = this.dateToPixel(task.baseline.start);
@@ -255,7 +282,6 @@ export class GanttView {
             `;
         }
 
-        // Summary Task Chevron Bracket Bar
         if (task.isSummary) {
             return `
                 ${baselineGhostHtml}
@@ -263,7 +289,6 @@ export class GanttView {
                     <div class="w-full h-2.5 bg-slate-800 rounded-t flex items-center relative">
                         <div class="h-full bg-slate-600 rounded-t" style="width: ${task.progress || 0}%;"></div>
                     </div>
-                    <!-- Chevron end caps -->
                     <div class="absolute -left-1 top-0 w-2 h-4 bg-slate-800 clip-path-left"></div>
                     <div class="absolute -right-1 top-0 w-2 h-4 bg-slate-800 clip-path-right"></div>
                     <span class="absolute left-full ml-2 top-0 text-[11px] font-bold text-slate-700 whitespace-nowrap">
@@ -273,7 +298,6 @@ export class GanttView {
             `;
         }
 
-        // Milestone Marker
         if (task.isMilestone) {
             const mx = x + this.dayWidth / 2 - 8;
             return `
@@ -287,7 +311,6 @@ export class GanttView {
             `;
         }
 
-        // Lead Time extension bar (e.g. procurement lead time)
         let leadTimeHtml = '';
         if (task.leadTime > 0) {
             const lx = finishX + this.dayWidth;
@@ -299,7 +322,6 @@ export class GanttView {
             `;
         }
 
-        // Regular Task Bar
         const barColor = isCritical ? '#ef4444' : ws.color;
         const progressWidth = `${task.progress || 0}%`;
 
@@ -307,22 +329,18 @@ export class GanttView {
             ${baselineGhostHtml}
             ${leadTimeHtml}
             <div data-task-id="${task.id}" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
-                <!-- Progress Fill -->
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
-                <!-- Task Name Label inside/outside -->
                 <span class="relative z-10 truncate text-[11px] font-medium">
-                    ${this.escapeHtml(task.name)}
+                    ${this.escapeHtml(task.name)} ${task.assignedTo ? `(${task.assignedTo})` : ''}
                 </span>
 
-                <!-- Self-Explaining Variance Badge Callout right on Gantt -->
                 ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `
                     <span class="absolute left-full ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm ${variance.badgeClass} whitespace-nowrap z-20">
                         ${variance.statusText}
                     </span>
                 ` : ''}
 
-                <!-- Drag Resize Right Handle -->
                 <div data-handle="right" data-task-id="${task.id}" class="gantt-handle-right absolute right-0 top-0 bottom-0 w-2 hover:w-3 bg-white/40 hover:bg-white cursor-ew-resize rounded-r transition-all"></div>
             </div>
         `;
@@ -343,7 +361,6 @@ export class GanttView {
 
                 if (fromIndex === undefined || toIndex === undefined) return;
 
-                // Coordinates calculation
                 const fromY = fromIndex * this.rowHeight + 15;
                 const toY = toIndex * this.rowHeight + 15;
 
@@ -354,7 +371,6 @@ export class GanttView {
                 const strokeColor = isCritical ? '#ef4444' : '#94a3b8';
                 const strokeWidth = isCritical ? 2.5 : 1.5;
 
-                // Path drawing with right-angle bends
                 const midX = fromX + 12;
                 let pathData = '';
 
@@ -384,20 +400,18 @@ export class GanttView {
     attachEventListeners(visibleTasks) {
         if (!this.container) return;
 
-        // Zoom button handlers
         this.container.querySelectorAll('[data-zoom]').forEach(btn => {
             btn.onclick = () => {
                 this.zoom = btn.getAttribute('data-zoom');
-                this.render(this.tasks);
+                this.render(this.tasks, this.calendar);
             };
         });
 
-        // Toggle checkboxes
         const cpToggle = this.container.querySelector('#toggle-critical-path');
         if (cpToggle) {
             cpToggle.onchange = (e) => {
                 this.showCriticalPath = e.target.checked;
-                this.render(this.tasks);
+                this.render(this.tasks, this.calendar);
             };
         }
 
@@ -405,11 +419,10 @@ export class GanttView {
         if (bgToggle) {
             bgToggle.onchange = (e) => {
                 this.showBaselineGhost = e.target.checked;
-                this.render(this.tasks);
+                this.render(this.tasks, this.calendar);
             };
         }
 
-        // Bidirectional Drag & Drop Event Handling
         this.initDragAndDrop(visibleTasks);
     }
 
@@ -453,19 +466,16 @@ export class GanttView {
             if (!task) return;
 
             if (isResizing) {
-                // Adjust duration
                 const newDuration = Math.max(1, initialDuration + deltaDays);
                 task.duration = newDuration;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration);
+                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
             } else {
-                // Translate start date
                 const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
                 task.start = newStart;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration);
+                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
             }
 
-            // Real-time render update
-            this.render(this.tasks);
+            this.render(this.tasks, this.calendar);
         };
 
         const onMouseUp = () => {
@@ -487,4 +497,3 @@ export class GanttView {
         return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 }
-
