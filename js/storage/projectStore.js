@@ -1,5 +1,5 @@
 /**
- * Project Store: LocalStorage Persistence, Custom .prj File Import/Export, Calendar & Resources Storage
+ * Project Store: LocalStorage Persistence, Custom .prj File Import/Export, Blank Project & Presets
  */
 
 import { Task } from '../models/taskModel.js';
@@ -121,9 +121,43 @@ export class ProjectStore {
     }
 
     /**
+     * Generate a new blank project structure
+     */
+    static getBlankProject() {
+        const today = new Date().toISOString().split('T')[0];
+        const calendar = new ProjectCalendar();
+        const resources = DEFAULT_RESOURCES;
+
+        const starterTask = new Task({
+            name: 'Initial Architecture Task',
+            stage: 'Concept',
+            workstream: 'HW',
+            assignedTo: 'Priya Sharma',
+            duration: 5,
+            start: today,
+            status: 'In Design'
+        });
+
+        const tasks = [starterTask];
+        DependencyEngine.scheduleProject(tasks, calendar);
+        BaselineEngine.captureBaseline(tasks);
+
+        return {
+            title: 'New Hardware R&D Project',
+            tasks: tasks,
+            resources: resources,
+            calendar: calendar
+        };
+    }
+
+    /**
      * Generate Pre-Loaded Hardware Project Template Presets
      */
     static getSamplePreset(presetId = 'iot_device') {
+        if (presetId === 'new_blank') {
+            return this.getBlankProject();
+        }
+
         const today = new Date().toISOString().split('T')[0];
         const calendar = new ProjectCalendar();
         const resources = DEFAULT_RESOURCES;

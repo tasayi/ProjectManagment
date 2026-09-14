@@ -1,5 +1,5 @@
 /**
- * Gantt View Component: Interactive SVG Timeline, Dependency Lines, Baseline Ghost Bars, Calendar Off Days & Bidirectional Drag & Drop
+ * Gantt View Component: Interactive SVG Timeline, Enhanced Dependency Arrows, Baseline Ghost Bars & Bidirectional Drag & Drop
  */
 
 import { WORKSTREAMS } from '../models/taskModel.js';
@@ -79,7 +79,7 @@ export class GanttView {
                             ${this.renderGridLines(timelineWidth, visibleTasks.length)}
 
                             <!-- Predecessor Connector Lines SVG -->
-                            <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-10">
+                            <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
                                 ${this.renderDependencies(visibleTasks)}
                             </svg>
 
@@ -368,8 +368,9 @@ export class GanttView {
                 const toX = this.dateToPixel(task.start);
 
                 const isCritical = this.showCriticalPath && (task.isCritical && targetTask.isCritical);
-                const strokeColor = isCritical ? '#ef4444' : '#94a3b8';
-                const strokeWidth = isCritical ? 2.5 : 1.5;
+                const strokeColor = isCritical ? '#ef4444' : '#475569';
+                const strokeWidth = isCritical ? 2.5 : 1.8;
+                const markerId = isCritical ? 'arrowhead-red' : 'arrowhead-slate';
 
                 const midX = fromX + 12;
                 let pathData = '';
@@ -382,15 +383,18 @@ export class GanttView {
                 }
 
                 paths.push(`
-                    <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" marker-end="url(#arrowhead)"/>
+                    <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
                 `);
             });
         });
 
         return `
             <defs>
-                <marker id="arrowhead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+                <marker id="arrowhead-slate" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+                </marker>
+                <marker id="arrowhead-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
                 </marker>
             </defs>
             ${paths.join('')}

@@ -44,6 +44,7 @@ def bundle():
         'js/views/milestonesView.js',
         'js/views/resourceView.js',
         'js/views/calendarModalView.js',
+        'js/views/dependencyTreeView.js',
         'js/storage/projectStore.js',
         'js/export/excelExporter.js',
         'js/export/printEngine.js',

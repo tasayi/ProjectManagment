@@ -12,6 +12,7 @@ import { GanttView } from './views/ganttView.js';
 import { MilestonesView } from './views/milestonesView.js';
 import { ResourceView } from './views/resourceView.js';
 import { CalendarModalView } from './views/calendarModalView.js';
+import { DependencyTreeView } from './views/dependencyTreeView.js';
 import { ProjectStore } from './storage/projectStore.js';
 import { ExcelExporter } from './export/excelExporter.js';
 import { PrintEngine } from './export/printEngine.js';
@@ -23,7 +24,7 @@ class HardwarePMApp {
         this.resources = DEFAULT_RESOURCES;
         this.calendar = new ProjectCalendar();
 
-        this.activeView = 'split'; // 'split', 'resources', or 'milestones'
+        this.activeView = 'split'; // 'split', 'resources', 'milestones', or 'deptree'
         this.selectedTaskId = null;
 
         // View Instances
@@ -32,6 +33,7 @@ class HardwarePMApp {
         this.milestonesView = null;
         this.resourceView = null;
         this.calendarModalView = null;
+        this.deptreeView = null;
     }
 
     init() {
@@ -59,11 +61,13 @@ class HardwarePMApp {
         const ganttContainer = document.getElementById('gantt-pane');
         const milestonesContainer = document.getElementById('milestones-view-container');
         const resourceContainer = document.getElementById('resource-view-container');
+        const deptreeContainer = document.getElementById('deptree-view-container');
         const calendarModalContainer = document.getElementById('calendar-modal-container');
 
         this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
         this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
         this.milestonesView = new MilestonesView(milestonesContainer);
+        this.deptreeView = new DependencyTreeView(deptreeContainer);
         this.resourceView = new ResourceView(resourceContainer, (updatedRes) => {
             this.resources = updatedRes;
             this.renderAllViews();
@@ -109,11 +113,13 @@ class HardwarePMApp {
         const splitContainer = document.getElementById('split-view-container');
         const milestonesContainer = document.getElementById('milestones-view-container');
         const resourceContainer = document.getElementById('resource-view-container');
+        const deptreeContainer = document.getElementById('deptree-view-container');
 
         if (this.activeView === 'split') {
             if (splitContainer) splitContainer.style.display = 'flex';
             if (milestonesContainer) milestonesContainer.style.display = 'none';
             if (resourceContainer) resourceContainer.style.display = 'none';
+            if (deptreeContainer) deptreeContainer.style.display = 'none';
 
             this.wbsView.render(this.tasks, this.resources);
             this.ganttView.render(this.tasks, this.calendar);
@@ -121,12 +127,21 @@ class HardwarePMApp {
             if (splitContainer) splitContainer.style.display = 'none';
             if (milestonesContainer) milestonesContainer.style.display = 'none';
             if (resourceContainer) resourceContainer.style.display = 'block';
+            if (deptreeContainer) deptreeContainer.style.display = 'none';
 
             this.resourceView.render(this.resources, this.tasks);
+        } else if (this.activeView === 'deptree') {
+            if (splitContainer) splitContainer.style.display = 'none';
+            if (milestonesContainer) milestonesContainer.style.display = 'none';
+            if (resourceContainer) resourceContainer.style.display = 'none';
+            if (deptreeContainer) deptreeContainer.style.display = 'block';
+
+            this.deptreeView.render(this.tasks);
         } else {
             if (splitContainer) splitContainer.style.display = 'none';
             if (milestonesContainer) milestonesContainer.style.display = 'block';
             if (resourceContainer) resourceContainer.style.display = 'none';
+            if (deptreeContainer) deptreeContainer.style.display = 'none';
 
             this.milestonesView.render(this.tasks);
         }
@@ -243,6 +258,7 @@ class HardwarePMApp {
         // View Mode Switcher
         const btnSplit = document.getElementById('view-btn-split');
         const btnResources = document.getElementById('view-btn-resources');
+        const btnDeptree = document.getElementById('view-btn-deptree');
         const btnMilestones = document.getElementById('view-btn-milestones');
 
         const updateViewBtns = (active) => {
@@ -250,6 +266,7 @@ class HardwarePMApp {
             [
                 { btn: btnSplit, name: 'split' },
                 { btn: btnResources, name: 'resources' },
+                { btn: btnDeptree, name: 'deptree' },
                 { btn: btnMilestones, name: 'milestones' }
             ].forEach(item => {
                 if (item.btn) {
@@ -263,6 +280,7 @@ class HardwarePMApp {
 
         if (btnSplit) btnSplit.onclick = () => updateViewBtns('split');
         if (btnResources) btnResources.onclick = () => updateViewBtns('resources');
+        if (btnDeptree) btnDeptree.onclick = () => updateViewBtns('deptree');
         if (btnMilestones) btnMilestones.onclick = () => updateViewBtns('milestones');
 
         // Calendar Config Modal Trigger
@@ -319,22 +337,35 @@ class HardwarePMApp {
             };
         }
 
-        // Presets Dropdown
+        // Presets & New Project Dropdown with Safety Data-Loss Confirmation
         const presetSelect = document.getElementById('preset-select');
         if (presetSelect) {
             presetSelect.onchange = (e) => {
                 const presetId = e.target.value;
-                if (presetId) {
-                    if (confirm('Load sample project preset? Any unsaved changes will be replaced.')) {
-                        const preset = ProjectStore.getSamplePreset(presetId);
+                if (!presetId) return;
+
+                const loadPresetAction = () => {
+                    const preset = ProjectStore.getSamplePreset(presetId);
+                    if (preset) {
                         this.projectTitle = preset.title;
                         this.tasks = preset.tasks;
                         this.resources = preset.resources;
                         this.calendar = preset.calendar;
                         this.renderAllViews();
                     }
-                    e.target.value = '';
+                };
+
+                // Confirm data replacement with backup option
+                const saveFirst = confirm('WARNING: Creating a new project or loading a preset will replace current project data.\n\nClick "OK" to SAVE current project (.prj) first before proceeding, or "Cancel" to choose options.');
+                if (saveFirst) {
+                    ProjectStore.exportProjectFile(this.projectTitle, this.tasks, this.resources, this.calendar);
+                    loadPresetAction();
+                } else {
+                    if (confirm('Proceed to load new project WITHOUT saving current data?')) {
+                        loadPresetAction();
+                    }
                 }
+                e.target.value = '';
             };
         }
 
