@@ -23,9 +23,9 @@ export class MilestonesView {
                     <div>
                         <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
                             <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 12l10 10 10-10L12 2z"/></svg>
-                            Hardware Deliverables & Milestone Roadmap
+                            Deliverables & Milestone Roadmap
                         </h2>
-                        <p class="text-xs text-slate-500">Executive summary of hardware development gates (EVT, DVT, PVT) and baseline schedule variance.</p>
+                        <p class="text-xs text-slate-500">Executive summary of stage gates and baseline schedule variance.</p>
                     </div>
                     <div class="flex items-center gap-2 text-xs">
                         <span class="px-2.5 py-1 bg-amber-100 text-amber-800 rounded font-semibold">Total Milestones: ${milestones.length}</span>

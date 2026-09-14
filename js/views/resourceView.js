@@ -24,7 +24,7 @@ export class ResourceView {
                     <div>
                         <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
                             <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                            Hardware Team Engineers & Workload Allocation Heatmap
+                            Team Engineers & Workload Allocation Heatmap
                         </h2>
                         <p class="text-xs text-slate-500">Manage engineer assignments and inspect daily capacity loading to spot over-allocation bottlenecks.</p>
                     </div>
@@ -177,7 +177,7 @@ export class ResourceView {
             addBtn.onclick = () => {
                 const name = prompt('Enter Engineer Name:');
                 if (name && name.trim()) {
-                    const role = prompt('Enter Engineer Role (e.g. Lead Firmware Engineer):') || 'Hardware Engineer';
+                    const role = prompt('Enter Engineer Role (e.g. Lead Firmware Engineer):') || 'Project Engineer';
                     const newRes = new Resource({
                         name: name.trim(),
                         role: role.trim(),

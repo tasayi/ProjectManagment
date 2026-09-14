@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Single-File Production Bundler Script for Hardware PM Tool.
+Single-File Production Bundler Script for Project Management Tool.
 Compiles modular HTML, CSS, and JavaScript into a single, standalone 'dist/HardwarePM.html' file.
 """
 
@@ -13,7 +13,7 @@ INDEX_PATH = os.path.join(BASE_DIR, 'index.html')
 OUTPUT_PATH = os.path.join(DIST_DIR, 'HardwarePM.html')
 
 def bundle():
-    print("Bundling Hardware PM web app into single standalone HTML file...")
+    print("Bundling Project Management web app into single standalone HTML file...")
     
     if not os.path.exists(DIST_DIR):
         os.makedirs(DIST_DIR)
@@ -45,6 +45,7 @@ def bundle():
         'js/views/resourceView.js',
         'js/views/calendarModalView.js',
         'js/views/dependencyTreeView.js',
+        'js/views/infoGuideView.js',
         'js/storage/projectStore.js',
         'js/export/excelExporter.js',
         'js/export/printEngine.js',
@@ -65,6 +66,7 @@ def bundle():
             code = re.sub(r'export\s+class\s+', 'class ', code)
             code = re.sub(r'export\s+const\s+', 'const ', code)
             code = re.sub(r'export\s+default\s+', '', code)
+            code = re.sub(r'export\s+function\s+', 'function ', code)
             
             bundled_js_parts.append(f"// --- Module: {relative_path} ---\n{code}\n")
 

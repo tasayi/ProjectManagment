@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hardware R&D Project Manager</title>
+    <title>Project Management</title>
     
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,9 +22,9 @@
         <div class="flex items-center gap-3">
             <div class="flex items-center gap-2 bg-indigo-600 px-2.5 py-1 rounded-md text-white font-bold text-sm shadow">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
-                <span>Hardware PM</span>
+                <span>Project Management</span>
             </div>
-            <input type="text" id="project-title-input" value="Hardware & Firmware R&D Project" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-56 md:w-64 transition" title="Click to rename project">
+            <input type="text" id="project-title-input" value="Project Management Schedule" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-52 md:w-60 transition" title="Click to rename project">
         </div>
 
         <!-- Center View Switcher & Baseline KPI Summary -->
@@ -34,11 +34,14 @@
                 <button id="view-btn-split" class="px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm">Grid & Gantt</button>
                 <button id="view-btn-resources" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Engineer Workload</button>
                 <button id="view-btn-deptree" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Dependency Tree</button>
-                <button id="view-btn-milestones" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Milestone Roadmap</button>
+                <button id="view-btn-milestones" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Milestones</button>
+                <button id="view-btn-info" class="px-3 py-1 bg-slate-800 text-amber-300 hover:bg-slate-700 rounded font-medium text-xs flex items-center gap-1">
+                    <span>❓ Info & Guide</span>
+                </button>
             </div>
 
             <!-- Baseline KPI Status Badge -->
-            <div id="header-baseline-kpi" class="hidden md:block px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
+            <div id="header-baseline-kpi" class="hidden xl:block px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
                 Baseline: Not Set
             </div>
         </div>
@@ -80,7 +83,7 @@
             <select id="preset-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" title="Create a new blank project or load a sample preset">
                 <option value="">New / Presets...</option>
                 <option value="new_blank">➕ Create New Blank Project</option>
-                <option value="iot_device">📁 Preset: IoT Tracker (HW + PCB + FW)</option>
+                <option value="iot_device">📁 Preset: IoT Tracker Schedule</option>
             </select>
 
             <!-- Print / PDF Select -->
@@ -117,6 +120,9 @@
 
         <!-- Milestone Executive Roadmap View (Initially Hidden) -->
         <div id="milestones-view-container" class="w-full h-full hidden overflow-auto"></div>
+
+        <!-- Info & User Guide View (Initially Hidden) -->
+        <div id="info-guide-view-container" class="w-full h-full hidden overflow-auto"></div>
 
         <!-- Calendar Config Modal Container -->
         <div id="calendar-modal-container"></div>

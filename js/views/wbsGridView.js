@@ -1,15 +1,15 @@
 /**
- * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing, Status Pills & Engineer Assignments
+ * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing, Status Pills & Custom Options
  */
 
-import { WORKSTREAMS, HARDWARE_STAGES, STATUS_PILLS } from '../models/taskModel.js';
+import { WORKSTREAMS, HARDWARE_STAGES, STATUS_PILLS, registerCustomWorkstream, registerCustomStage, registerCustomStatus } from '../models/taskModel.js';
 import { BaselineEngine } from '../engine/baselineEngine.js';
 
 export class WbsGridView {
     constructor(containerElement, onTaskChange, onTaskSelect) {
         this.container = containerElement;
-        this.onTaskChange = onTaskChange; // Callback when data changes
-        this.onTaskSelect = onTaskSelect; // Callback when row selected
+        this.onTaskChange = onTaskChange;
+        this.onTaskSelect = onTaskSelect;
         this.selectedTaskId = null;
         this.resources = [];
         this.visibleColumns = {
@@ -123,8 +123,8 @@ export class WbsGridView {
             const isSelected = t.id === this.selectedTaskId;
             const variance = BaselineEngine.getVariance(t);
             const indentLevel = (t.wbs.split('.').length - 1) * 14;
-            const wsInfo = WORKSTREAMS[t.workstream] || WORKSTREAMS['HW'];
-            const statusInfo = STATUS_PILLS[t.status] || STATUS_PILLS['Not Started'];
+            const wsInfo = WORKSTREAMS[t.workstream] || { name: t.workstream, color: '#6366f1', bg: '#e0e7ff' };
+            const statusInfo = STATUS_PILLS[t.status] || { label: t.status, class: 'bg-indigo-100 text-indigo-800 border-indigo-300' };
 
             return `
                 <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
@@ -157,6 +157,7 @@ export class WbsGridView {
                                 ${Object.keys(WORKSTREAMS).map(ws => `
                                     <option value="${ws}" ${t.workstream === ws ? 'selected' : ''}>${ws}</option>
                                 `).join('')}
+                                <option value="__ADD_CUSTOM_STREAM__">+ Add Custom...</option>
                             </select>
                         </td>
                     ` : ''}
@@ -168,6 +169,7 @@ export class WbsGridView {
                                 ${HARDWARE_STAGES.map(stg => `
                                     <option value="${stg}" ${t.stage === stg ? 'selected' : ''}>${stg}</option>
                                 `).join('')}
+                                <option value="__ADD_CUSTOM_STAGE__">+ Add Custom...</option>
                             </select>
                         </td>
                     ` : ''}
@@ -187,10 +189,11 @@ export class WbsGridView {
                     <!-- Status -->
                     ${this.visibleColumns.status ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <select data-field="status" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1 py-0.5 border ${statusInfo.class} focus:outline-none">
+                            <select data-field="status" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1.5 py-0.5 border ${statusInfo.class} focus:outline-none">
                                 ${Object.keys(STATUS_PILLS).map(st => `
                                     <option value="${st}" ${t.status === st ? 'selected' : ''}>${STATUS_PILLS[st].label}</option>
                                 `).join('')}
+                                <option value="__ADD_CUSTOM_STATUS__">+ Add Custom...</option>
                             </select>
                         </td>
                     ` : ''}
@@ -268,12 +271,38 @@ export class WbsGridView {
             });
         });
 
-        // Input change handlers
+        // Input change handlers with Custom Option Prompts
         this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
             element.addEventListener('change', (e) => {
                 const id = element.getAttribute('data-id');
                 const field = element.getAttribute('data-field');
                 let value = element.value;
+
+                if (value === '__ADD_CUSTOM_STREAM__') {
+                    const customName = prompt('Enter custom stream name (e.g., REL for Reliability):');
+                    if (customName && customName.trim()) {
+                        value = registerCustomWorkstream(customName.substr(0, 4), customName.trim());
+                    } else {
+                        this.render(this.tasks, this.resources);
+                        return;
+                    }
+                } else if (value === '__ADD_CUSTOM_STAGE__') {
+                    const customStage = prompt('Enter custom project stage name (e.g., Certification):');
+                    if (customStage && customStage.trim()) {
+                        value = registerCustomStage(customStage.trim());
+                    } else {
+                        this.render(this.tasks, this.resources);
+                        return;
+                    }
+                } else if (value === '__ADD_CUSTOM_STATUS__') {
+                    const customStatus = prompt('Enter custom status label (e.g., In Review):');
+                    if (customStatus && customStatus.trim()) {
+                        value = registerCustomStatus(customStatus.trim());
+                    } else {
+                        this.render(this.tasks, this.resources);
+                        return;
+                    }
+                }
 
                 if (field === 'duration' || field === 'leadTime') {
                     value = parseInt(value, 10) || 0;

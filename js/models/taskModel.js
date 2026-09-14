@@ -1,5 +1,5 @@
 /**
- * Task Model & Factory functions for Hardware Project Manager
+ * Task Model & Domain Metadata Definitions for Project Management Tool
  */
 
 export class Task {
@@ -13,10 +13,10 @@ export class Task {
         this.predecessors = data.predecessors || ''; // e.g. "2FS+3d, 4SS"
         this.progress = typeof data.progress === 'number' ? data.progress : 0; // 0 to 100
         
-        // Hardware R&D Specific Metadata
-        this.stage = data.stage || 'EVT'; // Concept, EVT, DVT, PVT, MP
-        this.workstream = data.workstream || 'HW'; // HW, EE, ME, FW, PROC, TEST, MFG
-        this.status = data.status || 'Not Started'; // Not Started, In Design, In Fab, Testing, Blocked, Complete, Delayed
+        // Metadata & Workstreams
+        this.stage = data.stage || 'EVT'; // Concept, EVT, DVT, PVT, MP, or custom
+        this.workstream = data.workstream || 'HW'; // HW, EE, ME, FW, SYS, PROC, TEST, MFG, or custom
+        this.status = data.status || 'Not Started'; // Not Started, In Design, In Fab, Testing, Blocked, Complete, Delayed, or custom
         this.isMilestone = Boolean(data.isMilestone) || this.duration === 0;
         this.isSummary = Boolean(data.isSummary) || false;
         this.parentId = data.parentId || null;
@@ -50,11 +50,10 @@ export class Task {
         let added = 0;
         const days = Math.max(1, durationDays);
         
-        // Working days calculation (skipping weekends)
         while (added < days - 1) {
             date.setDate(date.getDate() + 1);
             const dayOfWeek = date.getDay();
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) {
                 added++;
             }
         }
@@ -62,18 +61,22 @@ export class Task {
     }
 }
 
+// Built-in Workstream Disciplines (including predefined SYS)
 export const WORKSTREAMS = {
     'HW': { name: 'Hardware / System', color: '#3b82f6', bg: '#dbeafe' },
     'EE': { name: 'Electronics / PCB', color: '#8b5cf6', bg: '#ede9fe' },
     'ME': { name: 'Mechanical / Enclosure', color: '#f59e0b', bg: '#fef3c7' },
     'FW': { name: 'Firmware / Embedded', color: '#10b981', bg: '#d1fae5' },
+    'SYS': { name: 'System Engineering', color: '#6366f1', bg: '#e0e7ff' },
     'PROC': { name: 'Procurement / Fab', color: '#ec4899', bg: '#fce7f3' },
     'TEST': { name: 'Compliance / QA', color: '#06b6d4', bg: '#cffaff' },
     'MFG': { name: 'Manufacturing / Assembly', color: '#64748b', bg: '#f1f5f9' }
 };
 
+// Built-in Project Stages
 export const HARDWARE_STAGES = ['Concept', 'EVT', 'DVT', 'PVT', 'MP'];
 
+// Built-in Status Pills
 export const STATUS_PILLS = {
     'Not Started': { label: 'Not Started', class: 'bg-slate-100 text-slate-700 border-slate-300' },
     'In Design': { label: 'In Design', class: 'bg-blue-100 text-blue-700 border-blue-300' },
@@ -84,3 +87,38 @@ export const STATUS_PILLS = {
     'Complete': { label: 'Complete', class: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
 };
 
+/**
+ * Register Custom User-Defined Workstream
+ */
+export function registerCustomWorkstream(code, name, color = '#6366f1', bg = '#e0e7ff') {
+    const safeCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!WORKSTREAMS[safeCode]) {
+        WORKSTREAMS[safeCode] = { name: name || safeCode, color, bg };
+    }
+    return safeCode;
+}
+
+/**
+ * Register Custom User-Defined Stage
+ */
+export function registerCustomStage(stageName) {
+    const trimmed = stageName.trim();
+    if (trimmed && !HARDWARE_STAGES.includes(trimmed)) {
+        HARDWARE_STAGES.push(trimmed);
+    }
+    return trimmed;
+}
+
+/**
+ * Register Custom User-Defined Status
+ */
+export function registerCustomStatus(statusName) {
+    const trimmed = statusName.trim();
+    if (trimmed && !STATUS_PILLS[trimmed]) {
+        STATUS_PILLS[trimmed] = {
+            label: trimmed,
+            class: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+        };
+    }
+    return trimmed;
+}
