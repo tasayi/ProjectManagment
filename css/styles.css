@@ -1,0 +1,93 @@
+/* Hardware PM Tool Custom Styles & Print Media Rules */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom Gantt Clip Paths */
+.clip-path-left {
+    clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+
+.clip-path-right {
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* Custom Scrollbar for Grid and Gantt Panes */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Splitter Resizer styling */
+.split-resizer {
+    width: 6px;
+    background-color: #e2e8f0;
+    cursor: col-resize;
+    transition: background-color 0.2s;
+}
+
+.split-resizer:hover, .split-resizer.is-dragging {
+    background-color: #6366f1;
+}
+
+/* TARGETED PRINT MEDIA STYLES */
+@media print {
+    /* Hide top app header, modals, toolbar controls */
+    header, .app-toolbar, .gantt-toolbar, .wbs-toolbar, modal, button, input[type="text"]::placeholder {
+        display: none !important;
+    }
+
+    body {
+        background-color: white !important;
+        font-size: 10pt;
+    }
+
+    /* Print Gantt Chart ONLY */
+    body.print-gantt-only .wbs-grid-container {
+        display: none !important;
+    }
+    body.print-gantt-only .gantt-container {
+        width: 100% !important;
+        display: block !important;
+    }
+
+    /* Print WBS Table ONLY */
+    body.print-wbs-only .gantt-container {
+        display: none !important;
+    }
+    body.print-wbs-only .wbs-grid-container {
+        width: 100% !important;
+        display: block !important;
+    }
+
+    /* Print Milestones ONLY */
+    body.print-milestones-only .main-split-view {
+        display: none !important;
+    }
+    body.print-milestones-only .milestones-view {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    /* Page Breaks */
+    .page-break {
+        page-break-after: always;
+    }
+}
+

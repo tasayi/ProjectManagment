@@ -1,0 +1,2337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hardware R&D Project Manager</title>
+    
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SheetJS CDN for Excel (.xlsx) Export & Import -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- Custom App CSS -->
+    <style>
+/* Hardware PM Tool Custom Styles & Print Media Rules */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom Gantt Clip Paths */
+.clip-path-left {
+    clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+
+.clip-path-right {
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* Custom Scrollbar for Grid and Gantt Panes */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Splitter Resizer styling */
+.split-resizer {
+    width: 6px;
+    background-color: #e2e8f0;
+    cursor: col-resize;
+    transition: background-color 0.2s;
+}
+
+.split-resizer:hover, .split-resizer.is-dragging {
+    background-color: #6366f1;
+}
+
+/* TARGETED PRINT MEDIA STYLES */
+@media print {
+    /* Hide top app header, modals, toolbar controls */
+    header, .app-toolbar, .gantt-toolbar, .wbs-toolbar, modal, button, input[type="text"]::placeholder {
+        display: none !important;
+    }
+
+    body {
+        background-color: white !important;
+        font-size: 10pt;
+    }
+
+    /* Print Gantt Chart ONLY */
+    body.print-gantt-only .wbs-grid-container {
+        display: none !important;
+    }
+    body.print-gantt-only .gantt-container {
+        width: 100% !important;
+        display: block !important;
+    }
+
+    /* Print WBS Table ONLY */
+    body.print-wbs-only .gantt-container {
+        display: none !important;
+    }
+    body.print-wbs-only .wbs-grid-container {
+        width: 100% !important;
+        display: block !important;
+    }
+
+    /* Print Milestones ONLY */
+    body.print-milestones-only .main-split-view {
+        display: none !important;
+    }
+    body.print-milestones-only .milestones-view {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    /* Page Breaks */
+    .page-break {
+        page-break-after: always;
+    }
+}
+
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- App Top Navigation Header -->
+    <header class="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between shadow-md flex-wrap gap-2 z-30">
+        <!-- Brand & Editable Project Title -->
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 bg-indigo-600 px-2.5 py-1 rounded-md text-white font-bold text-sm shadow">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                <span>Hardware PM</span>
+            </div>
+            <input type="text" id="project-title-input" value="Hardware & Firmware R&D Project" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-64 md:w-80 transition" title="Click to rename project">
+        </div>
+
+        <!-- Center View Switcher & Baseline KPI Summary -->
+        <div class="flex items-center gap-3">
+            <!-- View Switcher -->
+            <div class="bg-slate-800 p-1 rounded-md flex items-center gap-1 border border-slate-700 text-xs">
+                <button id="view-btn-split" class="px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm">Grid & Gantt</button>
+                <button id="view-btn-milestones" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Milestone Roadmap</button>
+            </div>
+
+            <!-- Baseline KPI Status Badge -->
+            <div id="header-baseline-kpi" class="px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
+                Baseline: Not Set
+            </div>
+        </div>
+
+        <!-- Right Toolbar Actions: Baseline, File Save, Export, Print -->
+        <div class="flex items-center gap-2">
+            <!-- Set Baseline -->
+            <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Snapshot current schedule as baseline">
+                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Set Baseline
+            </button>
+
+            <!-- Export .prj -->
+            <button id="btn-export-prj" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                Save (.prj)
+            </button>
+
+            <!-- Import .prj -->
+            <button id="btn-import-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Open (.prj)
+            </button>
+            <input type="file" id="prj-file-input" accept=".prj,.json" class="hidden">
+
+            <!-- Export Excel -->
+            <button id="btn-export-excel" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition" title="Export to Excel (.xlsx) for backward compatibility">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Excel Export
+            </button>
+
+            <!-- Presets Select -->
+            <select id="preset-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none">
+                <option value="">Load Preset...</option>
+                <option value="iot_device">IoT Tracker (HW + PCB + FW)</option>
+            </select>
+
+            <!-- Print / PDF Select -->
+            <select id="print-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" title="Print or Save PDF of individual views">
+                <option value="">Print / PDF...</option>
+                <option value="all">Print Full Screen</option>
+                <option value="gantt">Print Gantt Timeline ONLY</option>
+                <option value="wbs">Print Activity List ONLY</option>
+                <option value="milestones">Print Milestones Roadmap ONLY</option>
+            </select>
+        </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="flex-1 flex overflow-hidden relative">
+
+        <!-- Split View (Grid + Gantt) -->
+        <div id="split-view-container" class="w-full h-full flex overflow-hidden">
+            <!-- Left Pane: WBS Grid (Default width: 50%) -->
+            <div id="wbs-pane" style="width: 50%; min-width: 340px;" class="h-full flex-shrink-0"></div>
+
+            <!-- Draggable Split Resizer Bar -->
+            <div id="split-resizer" class="split-resizer h-full z-20"></div>
+
+            <!-- Right Pane: Interactive Gantt Chart -->
+            <div id="gantt-pane" class="flex-1 h-full overflow-hidden"></div>
+        </div>
+
+        <!-- Milestone Executive Roadmap View (Initially Hidden) -->
+        <div id="milestones-view-container" class="w-full h-full hidden overflow-auto"></div>
+
+    </main>
+
+    <!-- App Entry Point Module -->
+    <script>
+// --- Module: js/models/taskModel.js ---
+/**
+ * Task Model & Factory functions for Hardware Project Manager
+ */
+
+class Task {
+    constructor(data = {}) {
+        this.id = data.id || 'task_' + Math.random().toString(36).substr(2, 9);
+        this.wbs = data.wbs || '1';
+        this.name = data.name || 'New Activity';
+        this.duration = typeof data.duration === 'number' ? data.duration : 1; // in working days
+        this.start = data.start || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        this.finish = data.finish || this.calculateFinishDate(this.start, this.duration);
+        this.predecessors = data.predecessors || ''; // e.g. "2FS+3d, 4SS"
+        this.progress = typeof data.progress === 'number' ? data.progress : 0; // 0 to 100
+        
+        // Hardware R&D Specific Metadata
+        this.stage = data.stage || 'EVT'; // Concept, EVT, DVT, PVT, MP
+        this.workstream = data.workstream || 'HW'; // HW, EE, ME, FW, PROC, TEST, MFG
+        this.status = data.status || 'Not Started'; // Not Started, In Design, In Fab, Testing, Blocked, Complete, Delayed
+        this.isMilestone = Boolean(data.isMilestone) || this.duration === 0;
+        this.isSummary = Boolean(data.isSummary) || false;
+        this.parentId = data.parentId || null;
+        this.expanded = data.expanded !== undefined ? data.expanded : true;
+        
+        // Vendor & Procurement
+        this.leadTime = data.leadTime || 0; // Component / Fab lead time in days
+        this.vendor = data.vendor || '';
+        this.assignedTo = data.assignedTo || '';
+        this.notes = data.notes || '';
+
+        // Baseline Snapshot Data
+        this.baseline = data.baseline ? {
+            start: data.baseline.start,
+            finish: data.baseline.finish,
+            duration: data.baseline.duration
+        } : null;
+
+        // Calculated Engine Properties (Transient)
+        this.earlyStart = null;
+        this.earlyFinish = null;
+        this.lateStart = null;
+        this.lateFinish = null;
+        this.slack = 0;
+        this.isCritical = false;
+    }
+
+    calculateFinishDate(startDateStr, durationDays) {
+        if (!startDateStr) return '';
+        const date = new Date(startDateStr);
+        let added = 0;
+        const days = Math.max(1, durationDays);
+        
+        // Working days calculation (skipping weekends)
+        while (added < days - 1) {
+            date.setDate(date.getDate() + 1);
+            const dayOfWeek = date.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
+                added++;
+            }
+        }
+        return date.toISOString().split('T')[0];
+    }
+}
+
+const WORKSTREAMS = {
+    'HW': { name: 'Hardware / System', color: '#3b82f6', bg: '#dbeafe' },
+    'EE': { name: 'Electronics / PCB', color: '#8b5cf6', bg: '#ede9fe' },
+    'ME': { name: 'Mechanical / Enclosure', color: '#f59e0b', bg: '#fef3c7' },
+    'FW': { name: 'Firmware / Embedded', color: '#10b981', bg: '#d1fae5' },
+    'PROC': { name: 'Procurement / Fab', color: '#ec4899', bg: '#fce7f3' },
+    'TEST': { name: 'Compliance / QA', color: '#06b6d4', bg: '#cffaff' },
+    'MFG': { name: 'Manufacturing / Assembly', color: '#64748b', bg: '#f1f5f9' }
+};
+
+const HARDWARE_STAGES = ['Concept', 'EVT', 'DVT', 'PVT', 'MP'];
+
+const STATUS_PILLS = {
+    'Not Started': { label: 'Not Started', class: 'bg-slate-100 text-slate-700 border-slate-300' },
+    'In Design': { label: 'In Design', class: 'bg-blue-100 text-blue-700 border-blue-300' },
+    'In Fab': { label: 'In Fab / Vendor', class: 'bg-purple-100 text-purple-700 border-purple-300' },
+    'Testing': { label: 'Testing / QA', class: 'bg-cyan-100 text-cyan-700 border-cyan-300' },
+    'Blocked': { label: 'Blocked / Risk', class: 'bg-amber-100 text-amber-800 border-amber-300' },
+    'Delayed': { label: 'Delayed', class: 'bg-red-100 text-red-700 border-red-300' },
+    'Complete': { label: 'Complete', class: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
+};
+
+
+// --- Module: js/engine/dependencyEngine.js ---
+/**
+ * Dependency Engine: WBS Tree, Dependency Parser, Auto-Scheduler, and Critical Path Method (CPM)
+ */
+
+class DependencyEngine {
+
+    /**
+     * Add working days to a date string (skipping weekends)
+     */
+    static addWorkingDays(startDateStr, days) {
+        if (!startDateStr) return '';
+        if (days <= 0) return startDateStr;
+        
+        let date = new Date(startDateStr);
+        let count = 0;
+        
+        while (count < days) {
+            date.setDate(date.getDate() + 1);
+            const day = date.getDay();
+            if (day !== 0 && day !== 6) { // Not Sunday or Saturday
+                count++;
+            }
+        }
+        return date.toISOString().split('T')[0];
+    }
+
+    /**
+     * Calculate working days between two dates (inclusive)
+     */
+    static getWorkingDays(startDateStr, endDateStr) {
+        if (!startDateStr || !endDateStr) return 1;
+        let start = new Date(startDateStr);
+        let end = new Date(endDateStr);
+        if (start > end) return 1;
+
+        let count = 0;
+        let current = new Date(start);
+        while (current <= end) {
+            const day = current.getDay();
+            if (day !== 0 && day !== 6) {
+                count++;
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        return Math.max(1, count);
+    }
+
+    /**
+     * Update WBS numbers and indent hierarchy for all tasks
+     */
+    static updateWBSHierarchy(tasks) {
+        const idMap = new Map();
+        tasks.forEach(t => idMap.set(t.id, t));
+
+        // Group children by parentId
+        const childrenMap = new Map();
+        tasks.forEach(t => {
+            const pid = t.parentId || 'root';
+            if (!childrenMap.has(pid)) childrenMap.set(pid, []);
+            childrenMap.get(pid).push(t);
+        });
+
+        // Helper to recursively assign WBS
+        function assignWBS(parentId, prefix) {
+            const children = childrenMap.get(parentId) || [];
+            children.forEach((child, index) => {
+                const num = index + 1;
+                child.wbs = prefix ? `${prefix}.${num}` : `${num}`;
+                const hasChildren = childrenMap.has(child.id) && childrenMap.get(child.id).length > 0;
+                child.isSummary = hasChildren;
+                if (hasChildren) {
+                    assignWBS(child.id, child.wbs);
+                }
+            });
+        }
+
+        assignWBS('root', '');
+
+        // Recalculate summary tasks bottom-up
+        this.recalculateSummaryTasks(tasks, childrenMap);
+    }
+
+    /**
+     * Recalculate summary task dates, duration, and progress from subtasks
+     */
+    static recalculateSummaryTasks(tasks, childrenMap) {
+        // Process summary tasks from deepest level up
+        const summaryTasks = tasks.filter(t => t.isSummary);
+        
+        // Sort summary tasks by WBS depth descending
+        summaryTasks.sort((a, b) => b.wbs.split('.').length - a.wbs.split('.').length);
+
+        summaryTasks.forEach(parent => {
+            const children = childrenMap.get(parent.id) || [];
+            if (children.length === 0) return;
+
+            let minStart = null;
+            let maxFinish = null;
+            let totalWeightedProgress = 0;
+            let totalDuration = 0;
+
+            children.forEach(child => {
+                if (child.start) {
+                    if (!minStart || new Date(child.start) < new Date(minStart)) {
+                        minStart = child.start;
+                    }
+                }
+                if (child.finish) {
+                    if (!maxFinish || new Date(child.finish) > new Date(maxFinish)) {
+                        maxFinish = child.finish;
+                    }
+                }
+                const dur = Math.max(1, child.duration || 1);
+                totalDuration += dur;
+                totalWeightedProgress += (child.progress || 0) * dur;
+            });
+
+            if (minStart) parent.start = minStart;
+            if (maxFinish) parent.finish = maxFinish;
+            if (minStart && maxFinish) {
+                parent.duration = this.getWorkingDays(minStart, maxFinish);
+            }
+            parent.progress = totalDuration > 0 ? Math.round(totalWeightedProgress / totalDuration) : 0;
+        });
+    }
+
+    /**
+     * Parse predecessor string into structured objects
+     * Format examples: "2", "2FS", "2FS+3d", "3SS-1d", "4FF"
+     */
+    static parsePredecessors(predStr, tasks) {
+        if (!predStr || typeof predStr !== 'string') return [];
+        
+        // Map WBS or Index or ID to task
+        const wbsMap = new Map();
+        tasks.forEach((t, idx) => {
+            wbsMap.set(t.wbs, t);
+            wbsMap.set((idx + 1).toString(), t);
+            wbsMap.set(t.id, t);
+        });
+
+        const items = predStr.split(',').map(s => s.trim()).filter(Boolean);
+        const results = [];
+
+        items.forEach(item => {
+            // Regex to match: [WBS/ID][TYPE: FS|SS|FF|SF]?[+|- LAG]?
+            const match = item.match(/^([\w.]+)(FS|SS|FF|SF)?(?:([+-])(\d+)[dD]?)?$/i);
+            if (match) {
+                const targetRef = match[1];
+                const type = (match[2] || 'FS').toUpperCase();
+                const sign = match[3] === '-' ? -1 : 1;
+                const lag = match[4] ? parseInt(match[4], 10) * sign : 0;
+
+                const targetTask = wbsMap.get(targetRef);
+                if (targetTask) {
+                    results.push({
+                        targetTask,
+                        type,
+                        lag
+                    });
+                }
+            }
+        });
+
+        return results;
+    }
+
+    /**
+     * Run Auto-Scheduler & Critical Path Method (CPM)
+     */
+    static scheduleProject(tasks) {
+        if (!tasks || tasks.length === 0) return;
+
+        this.updateWBSHierarchy(tasks);
+
+        const leafTasks = tasks.filter(t => !t.isSummary);
+        const taskMap = new Map(tasks.map(t => [t.id, t]));
+
+        // Calculate early start & finish based on predecessors
+        let changed = true;
+        let iterations = 0;
+        const maxIterations = tasks.length * 2;
+
+        while (changed && iterations < maxIterations) {
+            changed = false;
+            iterations++;
+
+            leafTasks.forEach(task => {
+                const preds = this.parsePredecessors(task.predecessors, tasks);
+                let earliestStart = new Date(task.start);
+
+                preds.forEach(pred => {
+                    const predTask = pred.targetTask;
+                    if (!predTask) return;
+
+                    let requiredDate;
+                    const predStart = new Date(predTask.start);
+                    const predFinish = new Date(predTask.finish);
+
+                    switch (pred.type) {
+                        case 'FS': // Finish to Start
+                            requiredDate = new Date(predFinish);
+                            requiredDate.setDate(requiredDate.getDate() + 1); // next day
+                            break;
+                        case 'SS': // Start to Start
+                            requiredDate = new Date(predStart);
+                            break;
+                        case 'FF': // Finish to Finish
+                            requiredDate = new Date(predFinish);
+                            // Finish should align, so start = finish - task.duration
+                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            break;
+                        case 'SF': // Start to Finish
+                            requiredDate = new Date(predStart);
+                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            break;
+                        default:
+                            requiredDate = new Date(predFinish);
+                            requiredDate.setDate(requiredDate.getDate() + 1);
+                    }
+
+                    // Apply lag
+                    if (pred.lag !== 0) {
+                        requiredDate.setDate(requiredDate.getDate() + pred.lag);
+                    }
+
+                    if (requiredDate > earliestStart) {
+                        earliestStart = requiredDate;
+                    }
+                });
+
+                const calculatedStart = earliestStart.toISOString().split('T')[0];
+                const calculatedFinish = this.addWorkingDays(calculatedStart, task.duration);
+
+                if (task.start !== calculatedStart || task.finish !== calculatedFinish) {
+                    task.start = calculatedStart;
+                    task.finish = calculatedFinish;
+                    changed = true;
+                }
+            });
+        }
+
+        // Recalculate summary tasks after leaf tasks update
+        this.updateWBSHierarchy(tasks);
+
+        // Compute Critical Path Method (CPM) Slack
+        this.calculateCriticalPath(tasks);
+    }
+
+    /**
+     * Calculate Critical Path (CPM) Total Slack
+     */
+    static calculateCriticalPath(tasks) {
+        if (tasks.length === 0) return;
+
+        // Find latest project finish date
+        let maxProjectFinish = null;
+        tasks.forEach(t => {
+            if (t.finish && (!maxProjectFinish || new Date(t.finish) > new Date(maxProjectFinish))) {
+                maxProjectFinish = t.finish;
+            }
+        });
+
+        if (!maxProjectFinish) return;
+
+        // Forward and backward slack estimate
+        tasks.forEach(t => {
+            const preds = this.parsePredecessors(t.predecessors, tasks);
+            const isTargetOfPred = tasks.some(other => {
+                const otherPreds = this.parsePredecessors(other.predecessors, tasks);
+                return otherPreds.some(p => p.targetTask.id === t.id);
+            });
+
+            // If task finish matches project finish or has 0 slack, mark critical
+            const finishDate = new Date(t.finish);
+            const projFinish = new Date(maxProjectFinish);
+            const diffDays = Math.abs((projFinish - finishDate) / (1000 * 60 * 60 * 24));
+
+            if (!isTargetOfPred && diffDays <= 1) {
+                t.isCritical = true;
+                t.slack = 0;
+            } else if (t.baseline && t.baseline.finish) {
+                const baselineFinish = new Date(t.baseline.finish);
+                const currentFinish = new Date(t.finish);
+                const drift = Math.round((currentFinish - baselineFinish) / (1000 * 60 * 60 * 24));
+                t.isCritical = drift > 0;
+                t.slack = Math.max(0, -drift);
+            } else {
+                t.isCritical = false;
+                t.slack = 0;
+            }
+        });
+    }
+}
+
+
+// --- Module: js/engine/baselineEngine.js ---
+/**
+ * Baseline Engine: Snapshot management, Variance calculations, and Self-Explaining Status Badges
+ */
+
+class BaselineEngine {
+
+    /**
+     * Capture current project state as the Baseline
+     */
+    static captureBaseline(tasks) {
+        let count = 0;
+        tasks.forEach(t => {
+            t.baseline = {
+                start: t.start,
+                finish: t.finish,
+                duration: t.duration
+            };
+            count++;
+        });
+        return count;
+    }
+
+    /**
+     * Clear baseline snapshot
+     */
+    static clearBaseline(tasks) {
+        tasks.forEach(t => {
+            t.baseline = null;
+        });
+    }
+
+    /**
+     * Calculate variance for a single task compared to its baseline
+     */
+    static getVariance(task) {
+        if (!task || !task.baseline || !task.baseline.start || !task.baseline.finish) {
+            return {
+                hasBaseline: false,
+                startVarianceDays: 0,
+                finishVarianceDays: 0,
+                statusText: 'No Baseline',
+                badgeClass: 'bg-slate-100 text-slate-500',
+                badgeColor: '#64748b'
+            };
+        }
+
+        const baselineStart = new Date(task.baseline.start);
+        const baselineFinish = new Date(task.baseline.finish);
+        const currentStart = new Date(task.start);
+        const currentFinish = new Date(task.finish);
+
+        const startVarianceDays = Math.round((currentStart - baselineStart) / (1000 * 60 * 60 * 24));
+        const finishVarianceDays = Math.round((currentFinish - baselineFinish) / (1000 * 60 * 60 * 24));
+
+        let statusText = 'On Track';
+        let badgeClass = 'bg-emerald-100 text-emerald-700 border-emerald-300';
+        let badgeColor = '#10b981';
+
+        if (finishVarianceDays > 0) {
+            statusText = `+${finishVarianceDays}d Delay`;
+            if (finishVarianceDays <= 3) {
+                badgeClass = 'bg-amber-100 text-amber-800 border-amber-300';
+                badgeColor = '#f59e0b';
+            } else {
+                badgeClass = 'bg-red-100 text-red-700 border-red-300';
+                badgeColor = '#ef4444';
+            }
+        } else if (finishVarianceDays < 0) {
+            statusText = `${finishVarianceDays}d Ahead`;
+            badgeClass = 'bg-blue-100 text-blue-700 border-blue-300';
+            badgeColor = '#3b82f6';
+        }
+
+        return {
+            hasBaseline: true,
+            startVarianceDays,
+            finishVarianceDays,
+            statusText,
+            badgeClass,
+            badgeColor
+        };
+    }
+
+    /**
+     * Get summary metrics of overall project baseline variance
+     */
+    static getProjectBaselineMetrics(tasks) {
+        const tasksWithBaseline = tasks.filter(t => t.baseline);
+        if (tasksWithBaseline.length === 0) {
+            return {
+                hasBaseline: false,
+                delayedTasksCount: 0,
+                aheadTasksCount: 0,
+                onTrackCount: 0,
+                maxDelayDays: 0
+            };
+        }
+
+        let delayedTasksCount = 0;
+        let aheadTasksCount = 0;
+        let onTrackCount = 0;
+        let maxDelayDays = 0;
+
+        tasksWithBaseline.forEach(t => {
+            const v = this.getVariance(t);
+            if (v.finishVarianceDays > 0) {
+                delayedTasksCount++;
+                if (v.finishVarianceDays > maxDelayDays) maxDelayDays = v.finishVarianceDays;
+            } else if (v.finishVarianceDays < 0) {
+                aheadTasksCount++;
+            } else {
+                onTrackCount++;
+            }
+        });
+
+        return {
+            hasBaseline: true,
+            delayedTasksCount,
+            aheadTasksCount,
+            onTrackCount,
+            maxDelayDays,
+            totalTasks: tasksWithBaseline.length
+        };
+    }
+}
+
+
+// --- Module: js/views/wbsGridView.js ---
+/**
+ * WBS Grid View: Spreadsheet-like Activity Table with Tree Hierarchy, Inline Editing & Status Pills
+ */
+
+
+
+
+class WbsGridView {
+    constructor(containerElement, onTaskChange, onTaskSelect) {
+        this.container = containerElement;
+        this.onTaskChange = onTaskChange; // Callback when data changes
+        this.onTaskSelect = onTaskSelect; // Callback when row selected
+        this.selectedTaskId = null;
+        this.visibleColumns = {
+            workstream: true,
+            stage: true,
+            duration: true,
+            dates: true,
+            predecessors: true,
+            status: true,
+            leadTime: true,
+            vendor: false,
+            variance: true
+        };
+    }
+
+    render(tasks) {
+        if (!this.container) return;
+
+        this.tasks = tasks;
+        const html = `
+            <div class="wbs-grid-container flex flex-col h-full bg-white border-r border-slate-200 overflow-hidden select-none">
+                <!-- Grid Header Toolbar -->
+                <div class="wbs-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-1 flex-wrap">
+                    <div class="flex items-center gap-1">
+                        <button id="btn-add-task" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium flex items-center gap-1 shadow-sm transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            Add Activity
+                        </button>
+                        <button id="btn-add-subtask" class="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-medium flex items-center gap-1 shadow-sm transition disabled:opacity-50" ${!this.selectedTaskId ? 'disabled' : ''}>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                            Subtask
+                        </button>
+                        <div class="h-4 w-px bg-slate-300 mx-1"></div>
+                        <button id="btn-indent" title="Indent (Make Child)" class="p-1 hover:bg-slate-200 text-slate-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+                        </button>
+                        <button id="btn-outdent" title="Outdent (Promote Parent)" class="p-1 hover:bg-slate-200 text-slate-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+                        </button>
+                        <button id="btn-delete" title="Delete Selected" class="p-1 hover:bg-red-100 text-red-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Filter / Search -->
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <input type="text" id="wbs-search" placeholder="Search tasks..." class="w-32 focus:w-44 transition-all text-xs pl-7 pr-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                            <svg class="w-3.5 h-3.5 absolute left-2 top-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Content Container -->
+                <div class="wbs-table-wrapper flex-1 overflow-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-slate-600 font-semibold uppercase tracking-wider">
+                            <tr>
+                                <th class="py-2 px-2 w-12 text-center border-r border-slate-200">WBS</th>
+                                <th class="py-2 px-3 min-w-[200px] border-r border-slate-200">Activity Name</th>
+                                ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Workstream</th>' : ''}
+                                ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-20 border-r border-slate-200">Stage</th>' : ''}
+                                ${this.visibleColumns.status ? '<th class="py-2 px-2 w-28 border-r border-slate-200">Status</th>' : ''}
+                                ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
+                                ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-20 text-center border-r border-slate-200" title="Procurement / Fab Lead Time">Lead (d)</th>' : ''}
+                                ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Start</th>' : ''}
+                                ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Finish</th>' : ''}
+                                ${this.visibleColumns.predecessors ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Predecessors</th>' : ''}
+                                ${this.visibleColumns.variance ? '<th class="py-2 px-2 w-24 text-center border-r border-slate-200">Variance</th>' : ''}
+                            </tr>
+                        </thead>
+                        <tbody id="wbs-tbody" class="divide-y divide-slate-200 font-normal text-slate-800 bg-white">
+                            ${this.renderRows(tasks)}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        this.container.innerHTML = html;
+        this.attachEventListeners();
+    }
+
+    renderRows(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return `<tr><td colspan="10" class="p-6 text-center text-slate-400 italic">No tasks found. Click "Add Activity" to create one.</td></tr>`;
+        }
+
+        // Determine visible tasks based on summary expand/collapse state
+        const hiddenIds = new Set();
+        const idMap = new Map(tasks.map(t => [t.id, t]));
+
+        tasks.forEach(t => {
+            if (t.parentId) {
+                let parent = idMap.get(t.parentId);
+                while (parent) {
+                    if (parent.expanded === false) {
+                        hiddenIds.add(t.id);
+                        break;
+                    }
+                    parent = parent.parentId ? idMap.get(parent.parentId) : null;
+                }
+            }
+        });
+
+        return tasks.map(t => {
+            if (hiddenIds.has(t.id)) return '';
+
+            const isSelected = t.id === this.selectedTaskId;
+            const variance = BaselineEngine.getVariance(t);
+            const indentLevel = (t.wbs.split('.').length - 1) * 16; // 16px per indent level
+            const wsInfo = WORKSTREAMS[t.workstream] || WORKSTREAMS['HW'];
+            const statusInfo = STATUS_PILLS[t.status] || STATUS_PILLS['Not Started'];
+
+            return `
+                <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
+                    <!-- WBS -->
+                    <td class="py-1.5 px-2 text-center text-slate-500 text-[11px] font-mono border-r border-slate-200">
+                        ${t.wbs}
+                    </td>
+
+                    <!-- Activity Name + Tree Control -->
+                    <td class="py-1 px-2 border-r border-slate-200 overflow-hidden">
+                        <div class="flex items-center gap-1" style="padding-left: ${indentLevel}px;">
+                            ${t.isSummary ? `
+                                <button data-action="toggle-expand" data-id="${t.id}" class="p-0.5 hover:bg-slate-200 rounded text-slate-500 transition">
+                                    <svg class="w-3.5 h-3.5 transform ${t.expanded ? 'rotate-90' : ''} transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </button>
+                            ` : `
+                                <span class="w-4 inline-block"></span>
+                            `}
+                            ${t.isMilestone ? `
+                                <svg class="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 12l10 10 10-10L12 2z"/></svg>
+                            ` : ''}
+                            <input type="text" data-field="name" data-id="${t.id}" value="${this.escapeHtml(t.name)}" class="w-full bg-transparent hover:bg-white focus:bg-white border-b border-transparent focus:border-indigo-500 px-1 py-0.5 rounded focus:outline-none text-xs truncate">
+                        </div>
+                    </td>
+
+                    <!-- Workstream -->
+                    ${this.visibleColumns.workstream ? `
+                        <td class="py-1 px-1 border-r border-slate-200">
+                            <select data-field="workstream" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1.5 py-0.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500" style="background-color: ${wsInfo.bg}; color: ${wsInfo.color};">
+                                ${Object.keys(WORKSTREAMS).map(ws => `
+                                    <option value="${ws}" ${t.workstream === ws ? 'selected' : ''}>${ws} - ${WORKSTREAMS[ws].name}</option>
+                                `).join('')}
+                            </select>
+                        </td>
+                    ` : ''}
+
+                    <!-- Stage -->
+                    ${this.visibleColumns.stage ? `
+                        <td class="py-1 px-1 border-r border-slate-200 text-center">
+                            <select data-field="stage" data-id="${t.id}" class="text-[11px] font-medium bg-slate-100 border border-slate-200 rounded px-1 py-0.5 focus:outline-none">
+                                ${HARDWARE_STAGES.map(stg => `
+                                    <option value="${stg}" ${t.stage === stg ? 'selected' : ''}>${stg}</option>
+                                `).join('')}
+                            </select>
+                        </td>
+                    ` : ''}
+
+                    <!-- Status -->
+                    ${this.visibleColumns.status ? `
+                        <td class="py-1 px-1 border-r border-slate-200">
+                            <select data-field="status" data-id="${t.id}" class="w-full text-[11px] font-medium rounded px-1 py-0.5 border ${statusInfo.class} focus:outline-none">
+                                ${Object.keys(STATUS_PILLS).map(st => `
+                                    <option value="${st}" ${t.status === st ? 'selected' : ''}>${STATUS_PILLS[st].label}</option>
+                                `).join('')}
+                            </select>
+                        </td>
+                    ` : ''}
+
+                    <!-- Duration -->
+                    ${this.visibleColumns.duration ? `
+                        <td class="py-1 px-1 text-center border-r border-slate-200">
+                            <input type="number" min="0" max="365" data-field="duration" data-id="${t.id}" value="${t.duration}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 font-semibold rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-slate-200 focus:border-indigo-500 rounded py-0.5 text-xs focus:outline-none"'}>
+                        </td>
+                    ` : ''}
+
+                    <!-- Procurement Lead Time -->
+                    ${this.visibleColumns.leadTime ? `
+                        <td class="py-1 px-1 text-center border-r border-slate-200">
+                            <input type="number" min="0" max="180" data-field="leadTime" data-id="${t.id}" value="${t.leadTime || 0}" class="w-12 text-center border border-amber-200 bg-amber-50/50 focus:bg-white rounded py-0.5 text-xs focus:outline-none" title="Procurement lead time in days">
+                        </td>
+                    ` : ''}
+
+                    <!-- Start Date -->
+                    ${this.visibleColumns.dates ? `
+                        <td class="py-1 px-1 border-r border-slate-200">
+                            <input type="date" data-field="start" data-id="${t.id}" value="${t.start}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"'}>
+                        </td>
+                    ` : ''}
+
+                    <!-- Finish Date -->
+                    ${this.visibleColumns.dates ? `
+                        <td class="py-1 px-1 border-r border-slate-200">
+                            <input type="date" data-field="finish" data-id="${t.id}" value="${t.finish}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center">
+                        </td>
+                    ` : ''}
+
+                    <!-- Predecessors -->
+                    ${this.visibleColumns.predecessors ? `
+                        <td class="py-1 px-1 border-r border-slate-200">
+                            <input type="text" data-field="predecessors" data-id="${t.id}" value="${this.escapeHtml(t.predecessors || '')}" placeholder="e.g. 1FS+2d" class="w-full border border-slate-200 font-mono text-[11px] rounded px-1 py-0.5 focus:outline-none focus:border-indigo-500" title="e.g., 2FS+3d, 4SS">
+                        </td>
+                    ` : ''}
+
+                    <!-- Variance -->
+                    ${this.visibleColumns.variance ? `
+                        <td class="py-1 px-1 text-center border-r border-slate-200">
+                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${variance.badgeClass}">
+                                ${variance.statusText}
+                            </span>
+                        </td>
+                    ` : ''}
+                </tr>
+            `;
+        }).join('');
+    }
+
+    attachEventListeners() {
+        if (!this.container) return;
+
+        // Click row selection
+        this.container.querySelectorAll('.wbs-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Prevent selection if clicking input elements
+                if (['INPUT', 'SELECT', 'BUTTON', 'SVG', 'PATH'].includes(e.target.tagName)) return;
+                const id = row.getAttribute('data-id');
+                this.selectTask(id);
+            });
+        });
+
+        // Expand/Collapse summary task
+        this.container.querySelectorAll('[data-action="toggle-expand"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = btn.getAttribute('data-id');
+                const task = this.tasks.find(t => t.id === id);
+                if (task) {
+                    task.expanded = !task.expanded;
+                    this.render(this.tasks);
+                }
+            });
+        });
+
+        // Inline input change handlers
+        this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
+            element.addEventListener('change', (e) => {
+                const id = element.getAttribute('data-id');
+                const field = element.getAttribute('data-field');
+                let value = element.value;
+
+                if (field === 'duration' || field === 'leadTime') {
+                    value = parseInt(value, 10) || 0;
+                }
+
+                if (this.onTaskChange) {
+                    this.onTaskChange(id, field, value);
+                }
+            });
+        });
+
+        // Toolbar Button handlers
+        const addBtn = this.container.querySelector('#btn-add-task');
+        if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
+
+        const subtaskBtn = this.container.querySelector('#btn-add-subtask');
+        if (subtaskBtn) subtaskBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'add-subtask');
+
+        const indentBtn = this.container.querySelector('#btn-indent');
+        if (indentBtn) indentBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'indent');
+
+        const outdentBtn = this.container.querySelector('#btn-outdent');
+        if (outdentBtn) outdentBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'outdent');
+
+        const deleteBtn = this.container.querySelector('#btn-delete');
+        if (deleteBtn) deleteBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'delete');
+
+        // Search filter
+        const searchInput = this.container.querySelector('#wbs-search');
+        if (searchInput) {
+            searchInput.oninput = (e) => {
+                const query = e.target.value.toLowerCase().trim();
+                this.filterTasks(query);
+            };
+        }
+    }
+
+    selectTask(taskId) {
+        this.selectedTaskId = taskId;
+        this.container.querySelectorAll('.wbs-row').forEach(r => {
+            if (r.getAttribute('data-id') === taskId) {
+                r.classList.add('bg-indigo-50', 'border-l-4', 'border-indigo-600', 'font-medium');
+            } else {
+                r.classList.remove('bg-indigo-50', 'border-l-4', 'border-indigo-600', 'font-medium');
+            }
+        });
+
+        // Enable toolbar buttons
+        ['#btn-add-subtask', '#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
+            const btn = this.container.querySelector(selector);
+            if (btn) btn.disabled = !taskId;
+        });
+
+        if (this.onTaskSelect) {
+            this.onTaskSelect(taskId);
+        }
+    }
+
+    filterTasks(query) {
+        const tbody = this.container.querySelector('#wbs-tbody');
+        if (!tbody) return;
+
+        if (!query) {
+            tbody.innerHTML = this.renderRows(this.tasks);
+            this.attachEventListeners();
+            return;
+        }
+
+        const filtered = this.tasks.filter(t => 
+            t.name.toLowerCase().includes(query) ||
+            t.wbs.includes(query) ||
+            t.workstream.toLowerCase().includes(query) ||
+            t.stage.toLowerCase().includes(query) ||
+            t.status.toLowerCase().includes(query)
+        );
+
+        tbody.innerHTML = this.renderRows(filtered);
+        this.attachEventListeners();
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+}
+
+
+// --- Module: js/views/ganttView.js ---
+/**
+ * Gantt View Component: Interactive SVG Timeline, Dependency Lines, Baseline Ghost Bars, and Bidirectional Drag & Drop
+ */
+
+
+
+
+
+class GanttView {
+    constructor(containerElement, onTaskUpdate) {
+        this.container = containerElement;
+        this.onTaskUpdate = onTaskUpdate; // Callback when dates/durations are dragged
+        this.zoom = 'Week'; // Day, Week, Month
+        this.showCriticalPath = false;
+        this.showBaselineGhost = true;
+        this.dragState = null;
+        this.dayWidth = 28; // pixels per day (Week zoom)
+        this.rowHeight = 33; // pixels per task row
+    }
+
+    render(tasks) {
+        if (!this.container) return;
+
+        this.tasks = tasks;
+
+        // Calculate timeline date bounds
+        const bounds = this.getTimelineBounds(tasks);
+        this.startDate = bounds.start;
+        this.endDate = bounds.end;
+        this.totalDays = DependencyEngine.getWorkingDays(this.startDate, this.endDate) + 14;
+
+        // Set pixel width based on zoom level
+        if (this.zoom === 'Day') this.dayWidth = 44;
+        else if (this.zoom === 'Week') this.dayWidth = 28;
+        else if (this.zoom === 'Month') this.dayWidth = 14;
+
+        const timelineWidth = Math.max(800, this.totalDays * this.dayWidth);
+
+        // Filter visible tasks based on summary expansion
+        const visibleTasks = this.getVisibleTasks(tasks);
+
+        const html = `
+            <div class="gantt-container flex flex-col h-full bg-white overflow-hidden select-none">
+                <!-- Gantt Controls Toolbar -->
+                <div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
+                    <!-- Zoom Controls -->
+                    <div class="flex items-center gap-1">
+                        <span class="text-slate-500 font-semibold uppercase text-[10px]">Zoom:</span>
+                        <div class="inline-flex rounded-md shadow-sm" role="group">
+                            <button data-zoom="Day" class="px-2.5 py-1 text-xs font-medium rounded-l border border-slate-300 ${this.zoom === 'Day' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 hover:bg-slate-50'} transition">Day</button>
+                            <button data-zoom="Week" class="px-2.5 py-1 text-xs font-medium border-t border-b border-slate-300 ${this.zoom === 'Week' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 hover:bg-slate-50'} transition">Week</button>
+                            <button data-zoom="Month" class="px-2.5 py-1 text-xs font-medium rounded-r border border-slate-300 ${this.zoom === 'Month' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 hover:bg-slate-50'} transition">Month</button>
+                        </div>
+                    </div>
+
+                    <!-- Toggles -->
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                            <input type="checkbox" id="toggle-critical-path" ${this.showCriticalPath ? 'checked' : ''} class="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5">
+                            <span class="${this.showCriticalPath ? 'text-red-700 font-bold' : ''}">Critical Path</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                            <input type="checkbox" id="toggle-baseline-ghost" ${this.showBaselineGhost ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5">
+                            <span>Baseline Shadows</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Timeline View Area -->
+                <div class="gantt-scroll-pane flex-1 overflow-auto relative bg-white">
+                    <div style="width: ${timelineWidth}px;" class="min-h-full relative">
+                        <!-- Header Calendar Row -->
+                        <div class="gantt-header sticky top-0 z-20 bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
+                            ${this.renderHeader(timelineWidth)}
+                        </div>
+
+                        <!-- Main Gantt SVG Layer -->
+                        <div class="gantt-body relative" style="height: ${visibleTasks.length * this.rowHeight}px;">
+                            <!-- Grid Background Lines -->
+                            ${this.renderGridLines(timelineWidth, visibleTasks.length)}
+
+                            <!-- Predecessor Connector Lines SVG -->
+                            <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-10">
+                                ${this.renderDependencies(visibleTasks)}
+                            </svg>
+
+                            <!-- Task Bars Layer -->
+                            <div class="gantt-bars-layer absolute inset-0 w-full h-full z-15">
+                                ${visibleTasks.map((task, idx) => this.renderTaskBar(task, idx)).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.container.innerHTML = html;
+        this.attachEventListeners(visibleTasks);
+    }
+
+    getTimelineBounds(tasks) {
+        let minDate = new Date();
+        let maxDate = new Date();
+        maxDate.setDate(maxDate.getDate() + 30);
+
+        if (tasks && tasks.length > 0) {
+            let first = true;
+            tasks.forEach(t => {
+                if (t.start) {
+                    const s = new Date(t.start);
+                    if (first || s < minDate) minDate = s;
+                }
+                if (t.finish) {
+                    const f = new Date(t.finish);
+                    if (first || f > maxDate) maxDate = f;
+                }
+                if (t.baseline && t.baseline.finish) {
+                    const bf = new Date(t.baseline.finish);
+                    if (bf > maxDate) maxDate = bf;
+                }
+                first = false;
+            });
+        }
+
+        // Add 7 days padding to bounds
+        minDate.setDate(minDate.getDate() - 5);
+        maxDate.setDate(maxDate.getDate() + 14);
+
+        return {
+            start: minDate.toISOString().split('T')[0],
+            end: maxDate.toISOString().split('T')[0]
+        };
+    }
+
+    getVisibleTasks(tasks) {
+        const hiddenIds = new Set();
+        const idMap = new Map(tasks.map(t => [t.id, t]));
+
+        tasks.forEach(t => {
+            if (t.parentId) {
+                let parent = idMap.get(t.parentId);
+                while (parent) {
+                    if (parent.expanded === false) {
+                        hiddenIds.add(t.id);
+                        break;
+                    }
+                    parent = parent.parentId ? idMap.get(parent.parentId) : null;
+                }
+            }
+        });
+
+        return tasks.filter(t => !hiddenIds.has(t.id));
+    }
+
+    renderHeader(timelineWidth) {
+        const monthsHtml = [];
+        const daysHtml = [];
+        
+        let curr = new Date(this.startDate);
+        const end = new Date(this.endDate);
+        
+        let currentMonth = '';
+        let monthWidth = 0;
+
+        while (curr <= end) {
+            const dateStr = curr.toISOString().split('T')[0];
+            const monthName = curr.toLocaleString('default', { month: 'short', year: 'numeric' });
+            const dayNum = curr.getDate();
+            const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+
+            daysHtml.push(`
+                <div style="width: ${this.dayWidth}px;" class="flex-shrink-0 text-center py-1 border-r border-slate-200 text-[10px] ${isWeekend ? 'bg-slate-200/50 text-slate-400 font-normal' : 'text-slate-600 font-semibold'}">
+                    ${dayNum}
+                </div>
+            `);
+
+            if (monthName !== currentMonth) {
+                if (currentMonth) {
+                    monthsHtml.push(`<div style="width: ${monthWidth}px;" class="flex-shrink-0 text-center py-1 border-r border-slate-300 border-b border-slate-200 font-bold text-slate-700 text-xs uppercase tracking-wide truncate bg-slate-100">${currentMonth}</div>`);
+                }
+                currentMonth = monthName;
+                monthWidth = this.dayWidth;
+            } else {
+                monthWidth += this.dayWidth;
+            }
+
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        if (currentMonth) {
+            monthsHtml.push(`<div style="width: ${monthWidth}px;" class="flex-shrink-0 text-center py-1 border-r border-slate-300 border-b border-slate-200 font-bold text-slate-700 text-xs uppercase tracking-wide truncate bg-slate-100">${currentMonth}</div>`);
+        }
+
+        return `
+            <div class="flex">${monthsHtml.join('')}</div>
+            <div class="flex">${daysHtml.join('')}</div>
+        `;
+    }
+
+    renderGridLines(timelineWidth, rowCount) {
+        const columns = [];
+        let curr = new Date(this.startDate);
+        const end = new Date(this.endDate);
+
+        while (curr <= end) {
+            const isWeekend = curr.getDay() === 0 || curr.getDay() === 6;
+            columns.push(`
+                <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${isWeekend ? 'bg-slate-50/70' : ''}"></div>
+            `);
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        return `
+            <div class="absolute inset-0 flex pointer-events-none">
+                ${columns.join('')}
+            </div>
+        `;
+    }
+
+    dateToPixel(dateStr) {
+        if (!dateStr) return 0;
+        const d = new Date(dateStr);
+        const start = new Date(this.startDate);
+        const days = (d - start) / (1000 * 60 * 60 * 24);
+        return Math.max(0, days * this.dayWidth);
+    }
+
+    pixelToDate(px) {
+        const days = Math.round(px / this.dayWidth);
+        const start = new Date(this.startDate);
+        start.setDate(start.getDate() + days);
+        return start.toISOString().split('T')[0];
+    }
+
+    renderTaskBar(task, rowIndex) {
+        const y = rowIndex * this.rowHeight + 4;
+        const x = this.dateToPixel(task.start);
+        const finishX = this.dateToPixel(task.finish);
+        const width = Math.max(this.dayWidth, finishX - x + this.dayWidth);
+        
+        const ws = WORKSTREAMS[task.workstream] || WORKSTREAMS['HW'];
+        const isCritical = this.showCriticalPath && task.isCritical;
+        const variance = BaselineEngine.getVariance(task);
+
+        // Baseline Ghost Bar calculations
+        let baselineGhostHtml = '';
+        if (this.showBaselineGhost && task.baseline && task.baseline.start && task.baseline.finish) {
+            const bx = this.dateToPixel(task.baseline.start);
+            const bFinishX = this.dateToPixel(task.baseline.finish);
+            const bWidth = Math.max(this.dayWidth, bFinishX - bx + this.dayWidth);
+            const ghostY = y + 18;
+
+            baselineGhostHtml = `
+                <div style="left: ${bx}px; top: ${ghostY}px; width: ${bWidth}px; height: 6px;" class="absolute rounded bg-slate-300/70 border border-slate-400 border-dashed pointer-events-none z-10" title="Baseline: ${task.baseline.start} to ${task.baseline.finish}"></div>
+            `;
+        }
+
+        // Summary Task Chevron Bracket Bar
+        if (task.isSummary) {
+            return `
+                ${baselineGhostHtml}
+                <div data-task-id="${task.id}" style="left: ${x}px; top: ${y + 4}px; width: ${width}px; height: 16px;" class="gantt-summary-bar absolute group cursor-pointer z-15">
+                    <div class="w-full h-2.5 bg-slate-800 rounded-t flex items-center relative">
+                        <div class="h-full bg-slate-600 rounded-t" style="width: ${task.progress || 0}%;"></div>
+                    </div>
+                    <!-- Chevron end caps -->
+                    <div class="absolute -left-1 top-0 w-2 h-4 bg-slate-800 clip-path-left"></div>
+                    <div class="absolute -right-1 top-0 w-2 h-4 bg-slate-800 clip-path-right"></div>
+                    <span class="absolute left-full ml-2 top-0 text-[11px] font-bold text-slate-700 whitespace-nowrap">
+                        ${this.escapeHtml(task.name)} (${task.progress}%)
+                    </span>
+                </div>
+            `;
+        }
+
+        // Milestone Marker
+        if (task.isMilestone) {
+            const mx = x + this.dayWidth / 2 - 8;
+            return `
+                ${baselineGhostHtml}
+                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${task.start})">
+                    <div class="w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm group-hover:scale-115 transition-transform"></div>
+                    <span class="absolute left-5 top-0 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
+                        ◆ ${this.escapeHtml(task.name)}
+                    </span>
+                </div>
+            `;
+        }
+
+        // Lead Time extension bar (e.g. procurement lead time)
+        let leadTimeHtml = '';
+        if (task.leadTime > 0) {
+            const lx = finishX + this.dayWidth;
+            const lWidth = task.leadTime * this.dayWidth;
+            leadTimeHtml = `
+                <div style="left: ${lx}px; top: ${y + 6}px; width: ${lWidth}px; height: 12px;" class="absolute bg-amber-100 border border-amber-300 border-dashed rounded-r flex items-center px-1 text-[9px] font-bold text-amber-800 truncate z-10" title="Procurement Lead Time: +${task.leadTime} days">
+                    +${task.leadTime}d Lead
+                </div>
+            `;
+        }
+
+        // Regular Task Bar
+        const barColor = isCritical ? '#ef4444' : ws.color;
+        const progressWidth = `${task.progress || 0}%`;
+
+        return `
+            ${baselineGhostHtml}
+            ${leadTimeHtml}
+            <div data-task-id="${task.id}" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
+                <!-- Progress Fill -->
+                <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
+
+                <!-- Task Name Label inside/outside -->
+                <span class="relative z-10 truncate text-[11px] font-medium">
+                    ${this.escapeHtml(task.name)}
+                </span>
+
+                <!-- Self-Explaining Variance Badge Callout right on Gantt -->
+                ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `
+                    <span class="absolute left-full ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold shadow-sm ${variance.badgeClass} whitespace-nowrap z-20">
+                        ${variance.statusText}
+                    </span>
+                ` : ''}
+
+                <!-- Drag Resize Right Handle -->
+                <div data-handle="right" data-task-id="${task.id}" class="gantt-handle-right absolute right-0 top-0 bottom-0 w-2 hover:w-3 bg-white/40 hover:bg-white cursor-ew-resize rounded-r transition-all"></div>
+            </div>
+        `;
+    }
+
+    renderDependencies(visibleTasks) {
+        const taskRowIndexMap = new Map(visibleTasks.map((t, idx) => [t.id, idx]));
+        const paths = [];
+
+        visibleTasks.forEach(task => {
+            const preds = DependencyEngine.parsePredecessors(task.predecessors, visibleTasks);
+            preds.forEach(pred => {
+                const targetTask = pred.targetTask;
+                if (!targetTask) return;
+
+                const fromIndex = taskRowIndexMap.get(targetTask.id);
+                const toIndex = taskRowIndexMap.get(task.id);
+
+                if (fromIndex === undefined || toIndex === undefined) return;
+
+                // Coordinates calculation
+                const fromY = fromIndex * this.rowHeight + 15;
+                const toY = toIndex * this.rowHeight + 15;
+
+                const fromX = this.dateToPixel(targetTask.finish) + this.dayWidth;
+                const toX = this.dateToPixel(task.start);
+
+                const isCritical = this.showCriticalPath && (task.isCritical && targetTask.isCritical);
+                const strokeColor = isCritical ? '#ef4444' : '#94a3b8';
+                const strokeWidth = isCritical ? 2.5 : 1.5;
+
+                // Path drawing with right-angle bends
+                const midX = fromX + 12;
+                let pathData = '';
+
+                if (midX < toX) {
+                    pathData = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX} ${toY}`;
+                } else {
+                    const loopY = (fromY + toY) / 2;
+                    pathData = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${loopY} L ${toX - 10} ${loopY} L ${toX - 10} ${toY} L ${toX} ${toY}`;
+                }
+
+                paths.push(`
+                    <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" marker-end="url(#arrowhead)"/>
+                `);
+            });
+        });
+
+        return `
+            <defs>
+                <marker id="arrowhead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+                </marker>
+            </defs>
+            ${paths.join('')}
+        `;
+    }
+
+    attachEventListeners(visibleTasks) {
+        if (!this.container) return;
+
+        // Zoom button handlers
+        this.container.querySelectorAll('[data-zoom]').forEach(btn => {
+            btn.onclick = () => {
+                this.zoom = btn.getAttribute('data-zoom');
+                this.render(this.tasks);
+            };
+        });
+
+        // Toggle checkboxes
+        const cpToggle = this.container.querySelector('#toggle-critical-path');
+        if (cpToggle) {
+            cpToggle.onchange = (e) => {
+                this.showCriticalPath = e.target.checked;
+                this.render(this.tasks);
+            };
+        }
+
+        const bgToggle = this.container.querySelector('#toggle-baseline-ghost');
+        if (bgToggle) {
+            bgToggle.onchange = (e) => {
+                this.showBaselineGhost = e.target.checked;
+                this.render(this.tasks);
+            };
+        }
+
+        // Bidirectional Drag & Drop Event Handling
+        this.initDragAndDrop(visibleTasks);
+    }
+
+    initDragAndDrop(visibleTasks) {
+        const pane = this.container.querySelector('.gantt-scroll-pane');
+        if (!pane) return;
+
+        let activeTaskId = null;
+        let isResizing = false;
+        let startMouseX = 0;
+        let initialTaskStart = null;
+        let initialDuration = 1;
+        let draggedBarElement = null;
+
+        const onMouseDown = (e) => {
+            const handle = e.target.closest('[data-handle="right"]');
+            const bar = e.target.closest('[data-task-id]');
+
+            if (!bar) return;
+
+            activeTaskId = bar.getAttribute('data-task-id');
+            const task = this.tasks.find(t => t.id === activeTaskId);
+            if (!task || task.isSummary) return;
+
+            isResizing = Boolean(handle);
+            startMouseX = e.clientX;
+            initialTaskStart = task.start;
+            initialDuration = task.duration;
+            draggedBarElement = bar;
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        };
+
+        const onMouseMove = (e) => {
+            if (!activeTaskId || !draggedBarElement) return;
+
+            const deltaPx = e.clientX - startMouseX;
+            const deltaDays = Math.round(deltaPx / this.dayWidth);
+            const task = this.tasks.find(t => t.id === activeTaskId);
+            if (!task) return;
+
+            if (isResizing) {
+                // Adjust duration
+                const newDuration = Math.max(1, initialDuration + deltaDays);
+                task.duration = newDuration;
+                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration);
+            } else {
+                // Translate start date
+                const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
+                task.start = newStart;
+                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration);
+            }
+
+            // Real-time render update
+            this.render(this.tasks);
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            if (activeTaskId && this.onTaskUpdate) {
+                this.onTaskUpdate(activeTaskId);
+            }
+
+            activeTaskId = null;
+            draggedBarElement = null;
+        };
+
+        pane.addEventListener('mousedown', onMouseDown);
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+}
+
+
+// --- Module: js/views/milestonesView.js ---
+/**
+ * Milestones View: Executive Hardware Deliverables Roadmap & Baseline Comparison Board
+ */
+
+
+
+
+class MilestonesView {
+    constructor(containerElement) {
+        this.container = containerElement;
+    }
+
+    render(tasks) {
+        if (!this.container) return;
+
+        // Filter milestones (tasks with isMilestone = true or duration = 0)
+        const milestones = tasks.filter(t => t.isMilestone || t.duration === 0);
+
+        const html = `
+            <div class="milestones-view flex flex-col h-full bg-slate-50 overflow-auto p-4 select-none">
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 12l10 10 10-10L12 2z"/></svg>
+                            Hardware Deliverables & Milestone Roadmap
+                        </h2>
+                        <p class="text-xs text-slate-500">Executive summary of hardware development gates (EVT, DVT, PVT) and baseline schedule variance.</p>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="px-2.5 py-1 bg-amber-100 text-amber-800 rounded font-semibold">Total Milestones: ${milestones.length}</span>
+                    </div>
+                </div>
+
+                <!-- Stages Pipeline -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3 flex-1">
+                    ${HARDWARE_STAGES.map(stage => this.renderStageColumn(stage, milestones)).join('')}
+                </div>
+            </div>
+        `;
+
+        this.container.innerHTML = html;
+    }
+
+    renderStageColumn(stage, milestones) {
+        const stageMilestones = milestones.filter(m => m.stage === stage);
+        
+        return `
+            <div class="stage-column flex flex-col bg-slate-100 rounded-lg border border-slate-200 overflow-hidden">
+                <!-- Stage Header -->
+                <div class="p-2.5 bg-slate-200 border-b border-slate-300 font-bold text-xs text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>${stage} Gate</span>
+                    <span class="px-1.5 py-0.5 bg-slate-300 text-slate-700 rounded text-[10px]">${stageMilestones.length}</span>
+                </div>
+
+                <!-- Stage Cards -->
+                <div class="p-2 flex-1 overflow-auto space-y-2">
+                    ${stageMilestones.length === 0 ? `
+                        <div class="p-3 text-center text-slate-400 text-xs italic">No milestones defined</div>
+                    ` : stageMilestones.map(m => this.renderMilestoneCard(m)).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    renderMilestoneCard(m) {
+        const ws = WORKSTREAMS[m.workstream] || WORKSTREAMS['HW'];
+        const statusInfo = STATUS_PILLS[m.status] || STATUS_PILLS['Not Started'];
+        const variance = BaselineEngine.getVariance(m);
+
+        return `
+            <div class="milestone-card bg-white p-3 rounded border border-slate-200 shadow-sm hover:shadow transition-shadow space-y-2">
+                <div class="flex items-start justify-between gap-1">
+                    <span class="font-semibold text-xs text-slate-800 leading-snug">
+                        ${this.escapeHtml(m.name)}
+                    </span>
+                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold" style="background-color: ${ws.bg}; color: ${ws.color};">
+                        ${m.workstream}
+                    </span>
+                </div>
+
+                <!-- Target & Baseline Dates -->
+                <div class="text-[11px] text-slate-600 space-y-0.5 font-mono">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Target:</span>
+                        <span class="font-bold text-slate-800">${m.finish || m.start}</span>
+                    </div>
+                    ${m.baseline && m.baseline.finish ? `
+                        <div class="flex justify-between text-[10px]">
+                            <span class="text-slate-400">Baseline:</span>
+                            <span class="text-slate-500 line-through">${m.baseline.finish}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <!-- Status & Variance -->
+                <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
+                    <span class="px-1.5 py-0.5 rounded font-medium border ${statusInfo.class}">
+                        ${statusInfo.label}
+                    </span>
+                    <span class="px-1.5 py-0.5 rounded font-bold ${variance.badgeClass}">
+                        ${variance.statusText}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+}
+
+
+// --- Module: js/storage/projectStore.js ---
+/**
+ * Project Store: Persistence in LocalStorage, Custom .prj File Import/Export, and Sample Presets
+ */
+
+
+
+
+
+const STORAGE_KEY = 'hardware_pm_project_data';
+
+class ProjectStore {
+    
+    /**
+     * Auto-save current tasks to LocalStorage
+     */
+    static saveToLocalStorage(projectTitle, tasks) {
+        try {
+            const payload = {
+                version: '1.0',
+                title: projectTitle || 'Hardware Project',
+                updatedAt: new Date().toISOString(),
+                tasks: tasks
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (e) {
+            console.error('Failed to save to localStorage:', e);
+        }
+    }
+
+    /**
+     * Load tasks from LocalStorage
+     */
+    static loadFromLocalStorage() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            return {
+                title: data.title || 'Hardware Project',
+                tasks: (data.tasks || []).map(t => new Task(t))
+            };
+        } catch (e) {
+            console.error('Failed to load from localStorage:', e);
+            return null;
+        }
+    }
+
+    /**
+     * Export project file as .prj (JSON format)
+     */
+    static exportProjectFile(projectTitle, tasks) {
+        const payload = {
+            appName: 'Antigravity Hardware PM',
+            fileFormat: 'hardware_pm_prj',
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            project: {
+                title: projectTitle || 'Hardware R&D Project',
+                tasks: tasks
+            }
+        };
+
+        const jsonStr = JSON.stringify(payload, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const safeName = (projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_');
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${safeName}.prj`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Import project file from .prj content
+     */
+    static importProjectFile(jsonContent) {
+        try {
+            const data = JSON.parse(jsonContent);
+            let rawTasks = [];
+
+            if (data.project && Array.isArray(data.project.tasks)) {
+                rawTasks = data.project.tasks;
+            } else if (Array.isArray(data.tasks)) {
+                rawTasks = data.tasks;
+            } else {
+                throw new Error('Invalid .prj file format');
+            }
+
+            const tasks = rawTasks.map(t => new Task(t));
+            DependencyEngine.scheduleProject(tasks);
+
+            return {
+                title: (data.project && data.project.title) || data.title || 'Imported Project',
+                tasks: tasks
+            };
+        } catch (e) {
+            alert('Failed to parse .prj file. Please ensure it is a valid project file.');
+            return null;
+        }
+    }
+
+    /**
+     * Generate Pre-Loaded Hardware Project Template Presets
+     */
+    static getSamplePreset(presetId = 'iot_device') {
+        const today = new Date().toISOString().split('T')[0];
+        let tasks = [];
+
+        if (presetId === 'iot_device') {
+            tasks = [
+                // Concept Phase
+                new Task({ name: 'System Architecture & Specs', stage: 'Concept', workstream: 'HW', duration: 5, start: DependencyEngine.addWorkingDays(today, 0), status: 'Complete', progress: 100 }),
+                new Task({ name: 'Component Selection & BOM Costing', stage: 'Concept', workstream: 'PROC', duration: 4, predecessors: '1FS', status: 'Complete', progress: 100 }),
+
+                // EVT Phase (Engineering Verification Test)
+                new Task({ name: 'EVT Phase - Prototype Spin', stage: 'EVT', workstream: 'HW', duration: 25, isSummary: true, expanded: true }),
+                new Task({ name: 'Schematic Capture (MCU + Sensors)', stage: 'EVT', workstream: 'EE', duration: 6, parentId: null, predecessors: '2FS', status: 'In Design', progress: 80 }),
+                new Task({ name: 'PCB Layout & Stackup Design', stage: 'EVT', workstream: 'EE', duration: 7, predecessors: '4FS', status: 'In Design', progress: 40 }),
+                new Task({ name: 'PCB Fab & Assembly (Vendor Lead Time)', stage: 'EVT', workstream: 'PROC', duration: 10, leadTime: 7, vendor: 'JLCPCB Vendor', predecessors: '5FS', status: 'In Fab' }),
+                new Task({ name: '3D Enclosure CAD Design', stage: 'EVT', workstream: 'ME', duration: 8, predecessors: '4SS+2d', status: 'In Design', progress: 60 }),
+                new Task({ name: 'SLA 3D Prototype Printing', stage: 'EVT', workstream: 'ME', duration: 3, predecessors: '7FS', status: 'Not Started' }),
+                new Task({ name: 'Firmware Board Support Package (BSP)', stage: 'EVT', workstream: 'FW', duration: 10, predecessors: '4SS+3d', status: 'In Design', progress: 50 }),
+                new Task({ name: 'EVT 1st Article Assembly & Bring-Up', stage: 'EVT', workstream: 'HW', duration: 4, predecessors: '6FS, 8FS, 9FS', status: 'Not Started' }),
+                new Task({ name: 'EVT Milestone Gate Passed', stage: 'EVT', workstream: 'HW', duration: 0, isMilestone: true, predecessors: '10FS', status: 'Not Started' }),
+
+                // DVT Phase (Design Verification Test)
+                new Task({ name: 'DVT Phase - Compliance & Tooling', stage: 'DVT', workstream: 'HW', duration: 30, isSummary: true, expanded: true }),
+                new Task({ name: 'Injection Mold Tooling Fabrication', stage: 'DVT', workstream: 'ME', duration: 20, leadTime: 14, vendor: 'Precision Molds Inc', predecessors: '11FS', status: 'Not Started' }),
+                new Task({ name: 'Board Spin Rev B (RF Optimization)', stage: 'DVT', workstream: 'EE', duration: 8, predecessors: '11FS', status: 'Not Started' }),
+                new Task({ name: 'FCC / CE Pre-Compliance Testing', stage: 'DVT', workstream: 'TEST', duration: 7, predecessors: '13FS, 14FS', status: 'Not Started' }),
+                new Task({ name: 'Firmware Feature Release v1.0', stage: 'DVT', workstream: 'FW', duration: 15, predecessors: '9FS', status: 'Not Started' }),
+                new Task({ name: 'DVT Golden Sample Sign-Off', stage: 'DVT', workstream: 'HW', duration: 0, isMilestone: true, predecessors: '15FS, 16FS', status: 'Not Started' })
+            ];
+        }
+
+        // Parent assignments for subtasks in preset
+        const evtSummary = tasks[2];
+        tasks[3].parentId = evtSummary.id;
+        tasks[4].parentId = evtSummary.id;
+        tasks[5].parentId = evtSummary.id;
+        tasks[6].parentId = evtSummary.id;
+        tasks[7].parentId = evtSummary.id;
+        tasks[8].parentId = evtSummary.id;
+        tasks[9].parentId = evtSummary.id;
+        tasks[10].parentId = evtSummary.id;
+
+        const dvtSummary = tasks[11];
+        tasks[12].parentId = dvtSummary.id;
+        tasks[13].parentId = dvtSummary.id;
+        tasks[14].parentId = dvtSummary.id;
+        tasks[15].parentId = dvtSummary.id;
+        tasks[16].parentId = dvtSummary.id;
+
+        // Schedule project tasks
+        DependencyEngine.scheduleProject(tasks);
+
+        // Capture initial baseline snapshot
+        BaselineEngine.captureBaseline(tasks);
+
+        return {
+            title: 'IoT Tracker Hardware-Firmware Project',
+            tasks: tasks
+        };
+    }
+}
+
+
+// --- Module: js/export/excelExporter.js ---
+/**
+ * Excel Exporter Module: Multi-tab Excel (.xlsx) / CSV export for backward compatibility
+ */
+
+
+
+class ExcelExporter {
+
+    static exportToExcel(projectTitle, tasks) {
+        if (!window.XLSX) {
+            alert('SheetJS Excel library not loaded. Falling back to CSV export.');
+            this.exportToCSV(projectTitle, tasks);
+            return;
+        }
+
+        const wb = window.XLSX.utils.book_new();
+
+        // Sheet 1: WBS Task Sheet
+        const wbsData = tasks.map(t => ({
+            'WBS': t.wbs,
+            'Activity Name': t.name,
+            'Workstream': t.workstream,
+            'Hardware Stage': t.stage,
+            'Status': t.status,
+            'Duration (Days)': t.duration,
+            'Start Date': t.start,
+            'Finish Date': t.finish,
+            'Predecessors': t.predecessors || '',
+            'Procurement Lead (Days)': t.leadTime || 0,
+            'Vendor': t.vendor || '',
+            'Assigned Engineer': t.assignedTo || '',
+            'Progress (%)': t.progress || 0,
+            'Is Milestone': t.isMilestone ? 'YES' : 'NO',
+            'Is Summary': t.isSummary ? 'YES' : 'NO'
+        }));
+
+        const wsWbs = window.XLSX.utils.json_to_sheet(wbsData);
+        window.XLSX.utils.book_append_sheet(wb, wsWbs, 'WBS Tasks');
+
+        // Sheet 2: Milestones & Gates
+        const milestones = tasks.filter(t => t.isMilestone || t.duration === 0);
+        const milestoneData = milestones.map(m => {
+            const v = BaselineEngine.getVariance(m);
+            return {
+                'WBS': m.wbs,
+                'Milestone Name': m.name,
+                'Hardware Stage': m.stage,
+                'Workstream': m.workstream,
+                'Target Date': m.finish || m.start,
+                'Baseline Date': (m.baseline && m.baseline.finish) || 'N/A',
+                'Variance': v.statusText,
+                'Status': m.status
+            };
+        });
+
+        const wsMilestones = window.XLSX.utils.json_to_sheet(milestoneData);
+        window.XLSX.utils.book_append_sheet(wb, wsMilestones, 'Milestones');
+
+        // Sheet 3: Baseline & Variance
+        const varianceData = tasks.map(t => {
+            const v = BaselineEngine.getVariance(t);
+            return {
+                'WBS': t.wbs,
+                'Activity Name': t.name,
+                'Current Start': t.start,
+                'Current Finish': t.finish,
+                'Baseline Start': (t.baseline && t.baseline.start) || 'N/A',
+                'Baseline Finish': (t.baseline && t.baseline.finish) || 'N/A',
+                'Finish Delay (Days)': v.finishVarianceDays,
+                'Status Callout': v.statusText
+            };
+        });
+
+        const wsVariance = window.XLSX.utils.json_to_sheet(varianceData);
+        window.XLSX.utils.book_append_sheet(wb, wsVariance, 'Baseline Variance');
+
+        // Download Excel File
+        const fileName = `${(projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_')}.xlsx`;
+        window.XLSX.writeFile(wb, fileName);
+    }
+
+    static exportToCSV(projectTitle, tasks) {
+        const headers = ['WBS', 'Activity Name', 'Workstream', 'Stage', 'Status', 'Duration', 'Start', 'Finish', 'Predecessors', 'LeadTime', 'Progress'];
+        const rows = tasks.map(t => [
+            `"${t.wbs}"`,
+            `"${t.name.replace(/"/g, '""')}"`,
+            `"${t.workstream}"`,
+            `"${t.stage}"`,
+            `"${t.status}"`,
+            t.duration,
+            `"${t.start}"`,
+            `"${t.finish}"`,
+            `"${(t.predecessors || '').replace(/"/g, '""')}"`,
+            t.leadTime || 0,
+            t.progress || 0
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${(projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+
+// --- Module: js/export/printEngine.js ---
+/**
+ * Print Engine: Targeted print styles and PDF export for individual views (Gantt-only, WBS-only, Milestones-only)
+ */
+
+class PrintEngine {
+
+    static printView(target = 'all') {
+        const body = document.body;
+
+        // Remove existing print class modifiers
+        body.classList.remove('print-gantt-only', 'print-wbs-only', 'print-milestones-only');
+
+        if (target === 'gantt') {
+            body.classList.add('print-gantt-only');
+        } else if (target === 'wbs') {
+            body.classList.add('print-wbs-only');
+        } else if (target === 'milestones') {
+            body.classList.add('print-milestones-only');
+        }
+
+        // Trigger browser native print / PDF save dialog
+        setTimeout(() => {
+            window.print();
+            // Clean up after print dialog closes
+            setTimeout(() => {
+                body.classList.remove('print-gantt-only', 'print-wbs-only', 'print-milestones-only');
+            }, 500);
+        }, 100);
+    }
+}
+
+
+// --- Module: js/app.js ---
+/**
+ * Main Application Bootstrap & State Controller for Hardware PM Tool
+ */
+
+
+
+
+
+
+
+
+
+
+
+class HardwarePMApp {
+    constructor() {
+        this.projectTitle = 'Hardware & Firmware R&D Project';
+        this.tasks = [];
+        this.activeView = 'split'; // 'split' or 'milestones'
+        this.selectedTaskId = null;
+
+        // View Instances
+        this.wbsView = null;
+        this.ganttView = null;
+        this.milestonesView = null;
+    }
+
+    init() {
+        console.log('Initializing Hardware PM Application...');
+
+        // Load saved state or default sample preset
+        const saved = ProjectStore.loadFromLocalStorage();
+        if (saved && saved.tasks && saved.tasks.length > 0) {
+            this.projectTitle = saved.title;
+            this.tasks = saved.tasks;
+        } else {
+            const preset = ProjectStore.getSamplePreset('iot_device');
+            this.projectTitle = preset.title;
+            this.tasks = preset.tasks;
+        }
+
+        // Initialize Engine & View Components
+        DependencyEngine.scheduleProject(this.tasks);
+
+        const wbsContainer = document.getElementById('wbs-pane');
+        const ganttContainer = document.getElementById('gantt-pane');
+        const milestonesContainer = document.getElementById('milestones-view-container');
+
+        this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
+        this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
+        this.milestonesView = new MilestonesView(milestonesContainer);
+
+        // Bind DOM Events
+        this.bindHeaderControls();
+        this.initSplitPaneResizer();
+
+        // Render Initial UI
+        this.renderAllViews();
+    }
+
+    renderAllViews() {
+        // Update Title Input
+        const titleInput = document.getElementById('project-title-input');
+        if (titleInput) titleInput.value = this.projectTitle;
+
+        // Update Baseline KPI Summary Pill in Header
+        const metrics = BaselineEngine.getProjectBaselineMetrics(this.tasks);
+        const kpiBadge = document.getElementById('header-baseline-kpi');
+        if (kpiBadge) {
+            if (metrics.hasBaseline) {
+                if (metrics.delayedTasksCount > 0) {
+                    kpiBadge.className = 'px-2.5 py-1 bg-red-100 text-red-700 rounded font-semibold text-xs border border-red-300';
+                    kpiBadge.textContent = `Baseline: ${metrics.delayedTasksCount} tasks delayed (Max +${metrics.maxDelayDays}d)`;
+                } else {
+                    kpiBadge.className = 'px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded font-semibold text-xs border border-emerald-300';
+                    kpiBadge.textContent = 'Baseline: All tasks on schedule';
+                }
+            } else {
+                kpiBadge.className = 'px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs border border-slate-300';
+                kpiBadge.textContent = 'Baseline: Not Set';
+            }
+        }
+
+        if (this.activeView === 'split') {
+            document.getElementById('split-view-container').style.display = 'flex';
+            document.getElementById('milestones-view-container').style.display = 'none';
+
+            this.wbsView.render(this.tasks);
+            this.ganttView.render(this.tasks);
+        } else {
+            document.getElementById('split-view-container').style.display = 'none';
+            document.getElementById('milestones-view-container').style.display = 'block';
+
+            this.milestonesView.render(this.tasks);
+        }
+
+        // Auto-save to LocalStorage
+        ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks);
+    }
+
+    handleTaskChange(taskId, actionOrField, value) {
+        if (!actionOrField) return;
+
+        if (actionOrField === 'add-task') {
+            const newTask = new Task({
+                name: 'New Hardware Task',
+                stage: 'EVT',
+                workstream: 'HW',
+                duration: 5,
+                start: new Date().toISOString().split('T')[0]
+            });
+            this.tasks.push(newTask);
+        } else if (actionOrField === 'add-subtask' && taskId) {
+            const parent = this.tasks.find(t => t.id === taskId);
+            if (parent) {
+                parent.isSummary = true;
+                parent.expanded = true;
+                const subtask = new Task({
+                    name: `Subtask of ${parent.name}`,
+                    stage: parent.stage,
+                    workstream: parent.workstream,
+                    parentId: parent.id,
+                    duration: 3,
+                    start: parent.start
+                });
+                this.tasks.push(subtask);
+            }
+        } else if (actionOrField === 'indent' && taskId) {
+            this.indentTask(taskId);
+        } else if (actionOrField === 'outdent' && taskId) {
+            this.outdentTask(taskId);
+        } else if (actionOrField === 'delete' && taskId) {
+            if (confirm('Delete selected activity and any subtasks?')) {
+                this.deleteTaskRecursive(taskId);
+            }
+        } else {
+            // Field edit (e.g. name, duration, start, predecessors, workstream, status)
+            const task = this.tasks.find(t => t.id === taskId);
+            if (task) {
+                task[actionOrField] = value;
+                if (actionOrField === 'duration' || actionOrField === 'start') {
+                    task.finish = task.calculateFinishDate(task.start, task.duration);
+                }
+            }
+        }
+
+        // Run Predecessor Engine & Schedule
+        DependencyEngine.scheduleProject(this.tasks);
+        this.renderAllViews();
+    }
+
+    handleGanttUpdate(taskId) {
+        // Called when dates are modified via Gantt drag and drop
+        DependencyEngine.scheduleProject(this.tasks);
+        this.renderAllViews();
+    }
+
+    handleTaskSelect(taskId) {
+        this.selectedTaskId = taskId;
+    }
+
+    indentTask(taskId) {
+        const index = this.tasks.findIndex(t => t.id === taskId);
+        if (index <= 0) return;
+
+        const task = this.tasks[index];
+        const prevTask = this.tasks[index - 1];
+
+        if (prevTask) {
+            task.parentId = prevTask.id;
+            prevTask.isSummary = true;
+            prevTask.expanded = true;
+        }
+    }
+
+    outdentTask(taskId) {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task || !task.parentId) return;
+
+        const parent = this.tasks.find(t => t.id === task.parentId);
+        task.parentId = parent ? parent.parentId : null;
+    }
+
+    deleteTaskRecursive(taskId) {
+        const toDelete = new Set([taskId]);
+        let added = true;
+        while (added) {
+            added = false;
+            this.tasks.forEach(t => {
+                if (t.parentId && toDelete.has(t.parentId) && !toDelete.has(t.id)) {
+                    toDelete.add(t.id);
+                    added = true;
+                }
+            });
+        }
+        this.tasks = this.tasks.filter(t => !toDelete.has(t.id));
+    }
+
+    bindHeaderControls() {
+        // Project Title Change
+        const titleInput = document.getElementById('project-title-input');
+        if (titleInput) {
+            titleInput.onchange = (e) => {
+                this.projectTitle = e.target.value;
+                ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks);
+            };
+        }
+
+        // View Mode Toggle (Split View vs Milestones Roadmap)
+        const btnSplit = document.getElementById('view-btn-split');
+        const btnMilestones = document.getElementById('view-btn-milestones');
+
+        if (btnSplit) {
+            btnSplit.onclick = () => {
+                this.activeView = 'split';
+                btnSplit.className = 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm';
+                if (btnMilestones) btnMilestones.className = 'px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs';
+                this.renderAllViews();
+            };
+        }
+
+        if (btnMilestones) {
+            btnMilestones.onclick = () => {
+                this.activeView = 'milestones';
+                btnMilestones.className = 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm';
+                if (btnSplit) btnSplit.className = 'px-3 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded font-medium text-xs';
+                this.renderAllViews();
+            };
+        }
+
+        // Baseline Controls
+        const btnSetBaseline = document.getElementById('btn-set-baseline');
+        if (btnSetBaseline) {
+            btnSetBaseline.onclick = () => {
+                if (confirm('Set current project schedule as the target Baseline?')) {
+                    BaselineEngine.captureBaseline(this.tasks);
+                    this.renderAllViews();
+                }
+            };
+        }
+
+        // Import / Export Controls
+        const btnExportPrj = document.getElementById('btn-export-prj');
+        if (btnExportPrj) {
+            btnExportPrj.onclick = () => ProjectStore.exportProjectFile(this.projectTitle, this.tasks);
+        }
+
+        const btnExportExcel = document.getElementById('btn-export-excel');
+        if (btnExportExcel) {
+            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks);
+        }
+
+        const btnImportPrj = document.getElementById('btn-import-prj');
+        const fileInput = document.getElementById('prj-file-input');
+
+        if (btnImportPrj && fileInput) {
+            btnImportPrj.onclick = () => fileInput.click();
+            fileInput.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        const imported = ProjectStore.importProjectFile(evt.target.result);
+                        if (imported) {
+                            this.projectTitle = imported.title;
+                            this.tasks = imported.tasks;
+                            this.renderAllViews();
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+        }
+
+        // Presets Dropdown
+        const presetSelect = document.getElementById('preset-select');
+        if (presetSelect) {
+            presetSelect.onchange = (e) => {
+                const presetId = e.target.value;
+                if (presetId) {
+                    if (confirm('Load sample project preset? Any unsaved changes will be replaced.')) {
+                        const preset = ProjectStore.getSamplePreset(presetId);
+                        this.projectTitle = preset.title;
+                        this.tasks = preset.tasks;
+                        this.renderAllViews();
+                    }
+                    e.target.value = '';
+                }
+            };
+        }
+
+        // Targeted Print Dropdown
+        const printSelect = document.getElementById('print-select');
+        if (printSelect) {
+            printSelect.onchange = (e) => {
+                const target = e.target.value;
+                if (target) {
+                    PrintEngine.printView(target);
+                    e.target.value = '';
+                }
+            };
+        }
+    }
+
+    initSplitPaneResizer() {
+        const resizer = document.getElementById('split-resizer');
+        const leftPane = document.getElementById('wbs-pane');
+        const container = document.getElementById('split-view-container');
+
+        if (!resizer || !leftPane || !container) return;
+
+        let isDragging = false;
+
+        resizer.onmousedown = (e) => {
+            isDragging = true;
+            resizer.classList.add('is-dragging');
+            document.body.style.cursor = 'col-resize';
+
+            document.onmousemove = (evt) => {
+                if (!isDragging) return;
+                const containerRect = container.getBoundingClientRect();
+                const newLeftWidth = evt.clientX - containerRect.left;
+                const clampedWidth = Math.max(300, Math.min(newLeftWidth, containerRect.width - 300));
+                leftPane.style.width = `${clampedWidth}px`;
+            };
+
+            document.onmouseup = () => {
+                isDragging = false;
+                resizer.classList.remove('is-dragging');
+                document.body.style.cursor = 'default';
+                document.onmousemove = null;
+                document.onmouseup = null;
+            };
+        };
+    }
+}
+
+// Bootstrap App when DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = new HardwarePMApp();
+    window.app.init();
+});
+
+
+</script>
+</body>
+</html>
