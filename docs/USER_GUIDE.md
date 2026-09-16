@@ -58,8 +58,8 @@ The top header bar provides instant access to project management controls:
 ## 3. WBS Task Hierarchy & Table Editing
 
 ### Creating & Hierarchically Structuring Tasks
-1. Click **Add Activity** in the Grid toolbar to insert a new row.
-2. Select a row and click **Subtask** or **Indent** to indent the activity underneath the previous row, turning the parent into a **Summary Task**.
+1. Click **Add Activity** in the Grid toolbar to insert a new activity. The new task automatically inherits the **hierarchy level** (parent ID), stage, and workstream of the currently selected row, inserted directly below it.
+2. Select a row and click **Indent** to indent the activity underneath the previous row, turning the parent row into a **Summary Task**.
 3. Click **Outdent** to promote a subtask up one hierarchy level.
 
 ### Milestone Diamonds

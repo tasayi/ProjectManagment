@@ -173,29 +173,50 @@ class ProjectManagementApp {
         if (!actionOrField) return;
 
         if (actionOrField === 'add-task') {
+            let parentId = null;
+            let stage = 'EVT';
+            let workstream = 'HW';
+            let insertIndex = this.tasks.length;
+            let startDate = new Date().toISOString().split('T')[0];
+
+            if (this.selectedTaskId) {
+                const selectedIndex = this.tasks.findIndex(t => t.id === this.selectedTaskId);
+                if (selectedIndex !== -1) {
+                    const selectedTask = this.tasks[selectedIndex];
+                    parentId = selectedTask.parentId || null;
+                    stage = selectedTask.stage || 'EVT';
+                    workstream = selectedTask.workstream || 'HW';
+                    startDate = selectedTask.start || startDate;
+
+                    // Insert after selected task and all of its recursive child descendants
+                    insertIndex = selectedIndex + 1;
+                    while (insertIndex < this.tasks.length) {
+                        if (this.isDescendantOf(this.tasks[insertIndex], selectedTask.id)) {
+                            insertIndex++;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            } else if (this.tasks.length > 0) {
+                const lastTask = this.tasks[this.tasks.length - 1];
+                parentId = lastTask.parentId || null;
+                stage = lastTask.stage || 'EVT';
+                workstream = lastTask.workstream || 'HW';
+                startDate = lastTask.start || startDate;
+            }
+
             const newTask = new Task({
                 name: 'New Activity',
-                stage: 'EVT',
-                workstream: 'HW',
+                stage: stage,
+                workstream: workstream,
+                parentId: parentId,
                 duration: 5,
-                start: new Date().toISOString().split('T')[0]
+                start: startDate
             });
-            this.tasks.push(newTask);
-        } else if (actionOrField === 'add-subtask' && taskId) {
-            const parent = this.tasks.find(t => t.id === taskId);
-            if (parent) {
-                parent.isSummary = true;
-                parent.expanded = true;
-                const subtask = new Task({
-                    name: `Subtask of ${parent.name}`,
-                    stage: parent.stage,
-                    workstream: parent.workstream,
-                    parentId: parent.id,
-                    duration: 3,
-                    start: parent.start
-                });
-                this.tasks.push(subtask);
-            }
+
+            this.tasks.splice(insertIndex, 0, newTask);
+            this.selectedTaskId = newTask.id;
         } else if (actionOrField === 'indent' && taskId) {
             this.indentTask(taskId);
         } else if (actionOrField === 'outdent' && taskId) {
@@ -216,6 +237,17 @@ class ProjectManagementApp {
 
         DependencyEngine.scheduleProject(this.tasks, this.calendar);
         this.renderAllViews();
+    }
+
+    isDescendantOf(candidateTask, ancestorId) {
+        if (!candidateTask || !candidateTask.parentId) return false;
+        let currentParentId = candidateTask.parentId;
+        while (currentParentId) {
+            if (currentParentId === ancestorId) return true;
+            const parent = this.tasks.find(t => t.id === currentParentId);
+            currentParentId = parent ? parent.parentId : null;
+        }
+        return false;
     }
 
     handleGanttUpdate(taskId) {

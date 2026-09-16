@@ -951,10 +951,6 @@ class WbsGridView {
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             Add Activity
                         </button>
-                        <button id="btn-add-subtask" class="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-medium flex items-center gap-1 shadow-sm transition disabled:opacity-50" ${!this.selectedTaskId ? 'disabled' : ''}>
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-                            Subtask
-                        </button>
                         <div class="h-4 w-px bg-slate-300 mx-1"></div>
                         <button id="btn-indent" title="Indent (Make Child)" class="p-1 hover:bg-slate-200 text-slate-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
@@ -1247,9 +1243,6 @@ class WbsGridView {
         const addBtn = this.container.querySelector('#btn-add-task');
         if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
 
-        const subtaskBtn = this.container.querySelector('#btn-add-subtask');
-        if (subtaskBtn) subtaskBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'add-subtask');
-
         const indentBtn = this.container.querySelector('#btn-indent');
         if (indentBtn) indentBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'indent');
 
@@ -1365,7 +1358,7 @@ class WbsGridView {
             }
         });
 
-        ['#btn-add-subtask', '#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
+        ['#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
             const btn = this.container.querySelector(selector);
             if (btn) btn.disabled = !taskId;
         });
@@ -3368,29 +3361,50 @@ class ProjectManagementApp {
         if (!actionOrField) return;
 
         if (actionOrField === 'add-task') {
+            let parentId = null;
+            let stage = 'EVT';
+            let workstream = 'HW';
+            let insertIndex = this.tasks.length;
+            let startDate = new Date().toISOString().split('T')[0];
+
+            if (this.selectedTaskId) {
+                const selectedIndex = this.tasks.findIndex(t => t.id === this.selectedTaskId);
+                if (selectedIndex !== -1) {
+                    const selectedTask = this.tasks[selectedIndex];
+                    parentId = selectedTask.parentId || null;
+                    stage = selectedTask.stage || 'EVT';
+                    workstream = selectedTask.workstream || 'HW';
+                    startDate = selectedTask.start || startDate;
+
+                    // Insert after selected task and all of its recursive child descendants
+                    insertIndex = selectedIndex + 1;
+                    while (insertIndex < this.tasks.length) {
+                        if (this.isDescendantOf(this.tasks[insertIndex], selectedTask.id)) {
+                            insertIndex++;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            } else if (this.tasks.length > 0) {
+                const lastTask = this.tasks[this.tasks.length - 1];
+                parentId = lastTask.parentId || null;
+                stage = lastTask.stage || 'EVT';
+                workstream = lastTask.workstream || 'HW';
+                startDate = lastTask.start || startDate;
+            }
+
             const newTask = new Task({
                 name: 'New Activity',
-                stage: 'EVT',
-                workstream: 'HW',
+                stage: stage,
+                workstream: workstream,
+                parentId: parentId,
                 duration: 5,
-                start: new Date().toISOString().split('T')[0]
+                start: startDate
             });
-            this.tasks.push(newTask);
-        } else if (actionOrField === 'add-subtask' && taskId) {
-            const parent = this.tasks.find(t => t.id === taskId);
-            if (parent) {
-                parent.isSummary = true;
-                parent.expanded = true;
-                const subtask = new Task({
-                    name: `Subtask of ${parent.name}`,
-                    stage: parent.stage,
-                    workstream: parent.workstream,
-                    parentId: parent.id,
-                    duration: 3,
-                    start: parent.start
-                });
-                this.tasks.push(subtask);
-            }
+
+            this.tasks.splice(insertIndex, 0, newTask);
+            this.selectedTaskId = newTask.id;
         } else if (actionOrField === 'indent' && taskId) {
             this.indentTask(taskId);
         } else if (actionOrField === 'outdent' && taskId) {
@@ -3411,6 +3425,17 @@ class ProjectManagementApp {
 
         DependencyEngine.scheduleProject(this.tasks, this.calendar);
         this.renderAllViews();
+    }
+
+    isDescendantOf(candidateTask, ancestorId) {
+        if (!candidateTask || !candidateTask.parentId) return false;
+        let currentParentId = candidateTask.parentId;
+        while (currentParentId) {
+            if (currentParentId === ancestorId) return true;
+            const parent = this.tasks.find(t => t.id === currentParentId);
+            currentParentId = parent ? parent.parentId : null;
+        }
+        return false;
     }
 
     handleGanttUpdate(taskId) {

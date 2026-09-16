@@ -40,10 +40,6 @@ export class WbsGridView {
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             Add Activity
                         </button>
-                        <button id="btn-add-subtask" class="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-medium flex items-center gap-1 shadow-sm transition disabled:opacity-50" ${!this.selectedTaskId ? 'disabled' : ''}>
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-                            Subtask
-                        </button>
                         <div class="h-4 w-px bg-slate-300 mx-1"></div>
                         <button id="btn-indent" title="Indent (Make Child)" class="p-1 hover:bg-slate-200 text-slate-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
@@ -336,9 +332,6 @@ export class WbsGridView {
         const addBtn = this.container.querySelector('#btn-add-task');
         if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
 
-        const subtaskBtn = this.container.querySelector('#btn-add-subtask');
-        if (subtaskBtn) subtaskBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'add-subtask');
-
         const indentBtn = this.container.querySelector('#btn-indent');
         if (indentBtn) indentBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'indent');
 
@@ -454,7 +447,7 @@ export class WbsGridView {
             }
         });
 
-        ['#btn-add-subtask', '#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
+        ['#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
             const btn = this.container.querySelector(selector);
             if (btn) btn.disabled = !taskId;
         });
