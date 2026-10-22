@@ -97,7 +97,15 @@ class ProjectManagementApp {
         const titleInput = document.getElementById('project-title-input');
         if (titleInput) titleInput.value = this.projectTitle;
 
-        // Update Baseline KPI Summary Pill in Header
+        // Update Baseline selector and KPI Summary Pill in Header
+        const baselineSelect = document.getElementById('baseline-select');
+        if (baselineSelect) {
+            const list = BaselineEngine.getBaselines(this.tasks);
+            const activeId = BaselineEngine.getActiveBaselineId(this.tasks);
+            baselineSelect.innerHTML = '<option value="">No baseline</option>' + list.map(b =>
+                `<option value="${b.id}" ${b.id === activeId ? 'selected' : ''}>${b.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')}</option>`
+            ).join('');
+        }
         const metrics = BaselineEngine.getProjectBaselineMetrics(this.tasks);
         const kpiBadge = document.getElementById('header-baseline-kpi');
         if (kpiBadge) {
@@ -172,7 +180,8 @@ class ProjectManagementApp {
     handleTaskChange(taskId, actionOrField, value) {
         if (!actionOrField) return;
 
-        if (actionOrField === 'add-task') {
+        if (actionOrField === 'add-task' || actionOrField === 'add-milestone') {
+            const isMs = actionOrField === 'add-milestone';
             let parentId = null;
             let stage = 'EVT';
             let workstream = 'HW';
@@ -207,11 +216,12 @@ class ProjectManagementApp {
             }
 
             const newTask = new Task({
-                name: 'New Activity',
+                name: isMs ? 'New Milestone' : 'New Activity',
                 stage: stage,
                 workstream: workstream,
                 parentId: parentId,
-                duration: 5,
+                duration: isMs ? 0 : 5,
+                isMilestone: isMs,
                 start: startDate
             });
 
@@ -231,7 +241,7 @@ class ProjectManagementApp {
             const task = this.tasks.find(t => t.id === taskId);
             if (task) {
                 task[actionOrField] = value;
-                // Finish is recalculated by the scheduler using the project calendar
+                if (actionOrField === 'duration') task.isMilestone = value === 0;
             }
         }
 
@@ -386,10 +396,20 @@ class ProjectManagementApp {
         const btnSetBaseline = document.getElementById('btn-set-baseline');
         if (btnSetBaseline) {
             btnSetBaseline.onclick = () => {
-                if (confirm('Set current project schedule as target Baseline?')) {
-                    BaselineEngine.captureBaseline(this.tasks);
-                    this.renderAllViews();
-                }
+                const next = BaselineEngine.getBaselines(this.tasks).length;
+                const label = prompt('Name for the new baseline (previous baselines are kept):', `Baseline ${next}`);
+                if (label === null) return;
+                BaselineEngine.captureBaseline(this.tasks, label);
+                this.renderAllViews();
+            };
+        }
+
+        const baselineSelect = document.getElementById('baseline-select');
+        if (baselineSelect) {
+            baselineSelect.onchange = (e) => {
+                const v = e.target.value;
+                BaselineEngine.setActiveBaseline(this.tasks, v === '' ? null : parseInt(v, 10));
+                this.renderAllViews();
             };
         }
 
@@ -467,7 +487,13 @@ class ProjectManagementApp {
             printSelect.onchange = (e) => {
                 const target = e.target.value;
                 if (target) {
-                    PrintEngine.printView(target);
+                    PrintEngine.printView(target, {
+                        title: this.projectTitle,
+                        tasks: this.tasks,
+                        calendar: this.calendar,
+                        zoom: this.ganttView ? this.ganttView.zoom : 'Week',
+                        showCriticalPath: this.ganttView ? this.ganttView.showCriticalPath : false
+                    });
                     e.target.value = '';
                 }
             };

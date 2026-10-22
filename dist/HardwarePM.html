@@ -13,7 +13,7 @@
 
     <!-- Custom App CSS -->
     <style>
-/* Hardware PM Tool Custom Styles & Print Media Rules */
+﻿/* Hardware PM Tool Custom Styles & Print Media Rules */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -61,51 +61,40 @@ body {
     background-color: #6366f1;
 }
 
-/* TARGETED PRINT MEDIA STYLES */
-@media print {
-    /* Hide top app header, modals, toolbar controls */
-    header, .app-toolbar, .gantt-toolbar, .wbs-toolbar, modal, button, input[type="text"]::placeholder {
-        display: none !important;
-    }
-
-    body {
-        background-color: white !important;
-        font-size: 10pt;
-    }
-
-    /* Print Gantt Chart ONLY */
-    body.print-gantt-only .wbs-grid-container {
-        display: none !important;
-    }
-    body.print-gantt-only .gantt-container {
-        width: 100% !important;
-        display: block !important;
-    }
-
-    /* Print WBS Table ONLY */
-    body.print-wbs-only .gantt-container {
-        display: none !important;
-    }
-    body.print-wbs-only .wbs-grid-container {
-        width: 100% !important;
-        display: block !important;
-    }
-
-    /* Print Milestones ONLY */
-    body.print-milestones-only .main-split-view {
-        display: none !important;
-    }
-    body.print-milestones-only .milestones-view {
-        display: block !important;
-        width: 100% !important;
-    }
-
-    /* Page Breaks */
-    .page-break {
-        page-break-after: always;
-    }
+/* PRINT: only the off-screen #print-root (full table / full Gantt) is printed */
+#print-root {
+    display: none;
 }
 
+@media print {
+    * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    body.printing-custom {
+        display: block !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: white !important;
+    }
+
+    body.printing-custom > *:not(#print-root) {
+        display: none !important;
+    }
+
+    body.printing-custom #print-root {
+        display: block !important;
+    }
+
+    #print-root .print-page-break {
+        break-before: page;
+    }
+
+    #print-root tr {
+        break-inside: avoid;
+    }
+}
 
 </style>
 </head>
@@ -149,8 +138,11 @@ body {
                 <span>Calendar</span>
             </button>
 
+            <!-- Active Baseline Selector -->
+            <select id="baseline-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none max-w-[150px]" title="Baseline used for variance comparison"></select>
+
             <!-- Set Baseline -->
-            <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Snapshot current schedule as baseline">
+            <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Capture a new baseline (previous baselines are kept)">
                 <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                 Baseline
             </button>
@@ -271,12 +263,28 @@ class Task {
         this.assignedTo = data.assignedTo || (this.assignedResources.length > 0 ? this.assignedResources[0].name : '');
         this.notes = data.notes || '';
 
-        // Baseline Snapshot Data
-        this.baseline = data.baseline ? {
-            start: data.baseline.start,
-            finish: data.baseline.finish,
-            duration: data.baseline.duration
-        } : null;
+        // Baseline history: every captured snapshot, plus the active one used for variance
+        this.baselines = Array.isArray(data.baselines) ? data.baselines.map(b => ({ ...b })) : [];
+        if (data.baseline) {
+            let active = this.baselines.find(b => b.id === data.baseline.id);
+            if (!active) {
+                const nextId = this.baselines.reduce((m, b) => Math.max(m, b.id), -1) + 1;
+                active = {
+                    id: typeof data.baseline.id === 'number' ? data.baseline.id : nextId,
+                    label: data.baseline.label || `Baseline ${nextId}`,
+                    date: data.baseline.date || '',
+                    start: data.baseline.start,
+                    finish: data.baseline.finish,
+                    duration: data.baseline.duration,
+                    progress: data.baseline.progress,
+                    status: data.baseline.status
+                };
+                this.baselines.push(active);
+            }
+            this.baseline = active;
+        } else {
+            this.baseline = null;
+        }
 
         // Calculated Engine Properties (Transient)
         this.earlyStart = null;
@@ -823,27 +831,75 @@ class DependencyEngine {
 class BaselineEngine {
 
     /**
-     * Capture current project state as the Baseline
+     * Capture current project state as a NEW baseline; earlier baselines are kept and the new one becomes active
      */
-    static captureBaseline(tasks) {
-        let count = 0;
+    static captureBaseline(tasks, label = '') {
+        const id = this.getBaselines(tasks).reduce((m, b) => Math.max(m, b.id), -1) + 1;
+        const name = (label || '').trim() || `Baseline ${id}`;
+        const date = new Date().toISOString();
+
         tasks.forEach(t => {
-            t.baseline = {
+            const snap = {
+                id, label: name, date,
                 start: t.start,
                 finish: t.finish,
-                duration: t.duration
+                duration: t.duration,
+                progress: t.progress || 0,
+                status: t.status
             };
-            count++;
+            t.baselines = [...(t.baselines || []), snap];
+            t.baseline = snap;
         });
-        return count;
+        return tasks.length;
     }
 
     /**
-     * Clear baseline snapshot
+     * Distinct baselines across all tasks, oldest first
+     */
+    static getBaselines(tasks) {
+        const map = new Map();
+        tasks.forEach(t => (t.baselines || []).forEach(b => {
+            if (!map.has(b.id)) map.set(b.id, { id: b.id, label: b.label, date: b.date });
+        }));
+        return [...map.values()].sort((a, b) => a.id - b.id);
+    }
+
+    static getActiveBaselineId(tasks) {
+        const t = tasks.find(x => x.baseline);
+        return t ? t.baseline.id : null;
+    }
+
+    /**
+     * Choose which baseline variances are measured against (null = none)
+     */
+    static setActiveBaseline(tasks, id) {
+        tasks.forEach(t => {
+            t.baseline = id === null || id === undefined
+                ? null
+                : (t.baselines || []).find(b => b.id === id) || null;
+        });
+    }
+
+    /**
+     * Finish-date drift of a task against every baseline captured, for tooltips and exports
+     */
+    static getHistory(task) {
+        return (task.baselines || []).map(b => ({
+            id: b.id,
+            label: b.label,
+            start: b.start,
+            finish: b.finish,
+            finishVarianceDays: Math.round((new Date(task.finish) - new Date(b.finish)) / 86400000)
+        }));
+    }
+
+    /**
+     * Clear all baselines
      */
     static clearBaseline(tasks) {
         tasks.forEach(t => {
             t.baseline = null;
+            t.baselines = [];
         });
     }
 
@@ -966,6 +1022,7 @@ class WbsGridView {
             status: true,
             assignedTo: true,
             duration: true,
+            progress: true,
             dates: true,
             predecessors: true,
             leadTime: true,
@@ -987,6 +1044,9 @@ class WbsGridView {
                         <button id="btn-add-task" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium flex items-center gap-1 shadow-sm transition">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             Add Activity
+                        </button>
+                        <button id="btn-add-milestone" title="Add a zero-duration milestone (diamond on the Gantt)" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium flex items-center gap-1 shadow-sm transition">
+                            <span>&#9670;</span> Add Milestone
                         </button>
                         <div class="h-4 w-px bg-slate-300 mx-1"></div>
                         <button id="btn-indent" title="Indent (Make Child)" class="p-1 hover:bg-slate-200 text-slate-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
@@ -1021,6 +1081,7 @@ class WbsGridView {
                                 ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 min-w-[140px] border-r border-slate-200">Assigned Engineers</th>' : ''}
                                 ${this.visibleColumns.status ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Status</th>' : ''}
                                 ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
+                                ${this.visibleColumns.progress ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Work completed">Done %</th>' : ''}
                                 ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Procurement Lead Time">Lead (d)</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Start</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Finish</th>' : ''}
@@ -1158,6 +1219,13 @@ class WbsGridView {
                         </td>
                     ` : ''}
 
+                    <!-- Progress -->
+                    ${this.visibleColumns.progress ? `
+                        <td class="py-1 px-1 text-center border-r border-slate-200">
+                            <input type="number" min="0" max="100" data-field="progress" data-id="${t.id}" value="${t.progress || 0}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 font-semibold rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-slate-200 focus:border-indigo-500 rounded py-0.5 text-xs focus:outline-none"'}>
+                        </td>
+                    ` : ''}
+
                     <!-- Procurement Lead Time -->
                     ${this.visibleColumns.leadTime ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
@@ -1189,7 +1257,7 @@ class WbsGridView {
                     <!-- Variance -->
                     ${this.visibleColumns.variance ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
-                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${variance.badgeClass}">
+                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${variance.badgeClass}" title="${this.escapeHtml(BaselineEngine.getHistory(t).map(h => `${h.label}: finish ${CalendarEngine.formatDate(h.finish)} (${h.finishVarianceDays > 0 ? '+' : ''}${h.finishVarianceDays}d)`).join('\n'))}">
                                 ${variance.statusText}
                             </span>
                         </td>
@@ -1315,8 +1383,9 @@ class WbsGridView {
                     }
                 }
 
-                if (field === 'duration' || field === 'leadTime') {
+                if (field === 'duration' || field === 'leadTime' || field === 'progress') {
                     value = parseInt(value, 10) || 0;
+                    if (field === 'progress') value = Math.max(0, Math.min(100, value));
                 }
 
                 if (this.onTaskChange) {
@@ -1328,6 +1397,9 @@ class WbsGridView {
         // Toolbar buttons
         const addBtn = this.container.querySelector('#btn-add-task');
         if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
+
+        const addMsBtn = this.container.querySelector('#btn-add-milestone');
+        if (addMsBtn) addMsBtn.onclick = () => this.onTaskChange(null, 'add-milestone');
 
         const indentBtn = this.container.querySelector('#btn-indent');
         if (indentBtn) indentBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'indent');
@@ -1503,6 +1575,8 @@ class GanttView {
         this.dayWidth = 28;
         this.rowHeight = 33;
         this.calendar = null;
+        this.printMode = false;
+        this.timelineWidth = 0;
     }
 
     render(tasks, calendar) {
@@ -1521,12 +1595,13 @@ class GanttView {
         else if (this.zoom === 'Month') this.dayWidth = 14;
 
         const timelineWidth = Math.max(800, this.totalDays * this.dayWidth);
+        this.timelineWidth = timelineWidth;
         const visibleTasks = this.getVisibleTasks(tasks);
 
         const html = `
-            <div class="gantt-container flex flex-col h-full bg-white overflow-hidden select-none">
+            <div class="gantt-container flex flex-col ${this.printMode ? '' : 'h-full overflow-hidden'} bg-white select-none">
                 <!-- Gantt Controls Toolbar -->
-                <div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
+                ${this.printMode ? '' : `<div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
                     <!-- Zoom Controls -->
                     <div class="flex items-center gap-1">
                         <span class="text-slate-500 font-semibold uppercase text-[10px]">Zoom:</span>
@@ -1548,13 +1623,13 @@ class GanttView {
                             <span>Baseline Shadows</span>
                         </label>
                     </div>
-                </div>
+                </div>`}
 
                 <!-- Timeline View Area -->
-                <div class="gantt-scroll-pane flex-1 overflow-auto relative bg-white">
+                <div class="gantt-scroll-pane ${this.printMode ? '' : 'flex-1 overflow-auto'} relative bg-white">
                     <div style="width: ${timelineWidth}px;" class="min-h-full relative">
                         <!-- Header Calendar Row -->
-                        <div class="gantt-header sticky top-0 z-20 bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
+                        <div class="gantt-header ${this.printMode ? '' : 'sticky top-0 z-20'} bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
                             ${this.renderHeader(timelineWidth)}
                         </div>
 
@@ -1579,7 +1654,7 @@ class GanttView {
         `;
 
         this.container.innerHTML = html;
-        this.attachEventListeners(visibleTasks);
+        if (!this.printMode) this.attachEventListeners(visibleTasks);
     }
 
     getTimelineBounds(tasks) {
@@ -1616,6 +1691,7 @@ class GanttView {
     }
 
     getVisibleTasks(tasks) {
+        if (this.printMode) return tasks;
         const hiddenIds = new Set();
         const idMap = new Map(tasks.map(t => [t.id, t]));
 
@@ -1813,11 +1889,11 @@ class GanttView {
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
+            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
-                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''}
+                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''} <span class="opacity-90 font-bold">${task.progress || 0}%</span>
                 </span>
 
                 ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `
@@ -1832,6 +1908,7 @@ class GanttView {
     }
 
     renderDependencies(visibleTasks) {
+        const sfx = this.printMode ? '-print' : '';
         const taskRowIndexMap = new Map(visibleTasks.map((t, idx) => [t.id, idx]));
         const paths = [];
 
@@ -1855,7 +1932,7 @@ class GanttView {
                 const isCritical = this.showCriticalPath && (task.isCritical && targetTask.isCritical);
                 const strokeColor = isCritical ? '#ef4444' : '#475569';
                 const strokeWidth = isCritical ? 2.5 : 1.8;
-                const markerId = isCritical ? 'arrowhead-red' : 'arrowhead-slate';
+                const markerId = (isCritical ? 'arrowhead-red' : 'arrowhead-slate') + sfx;
 
                 const midX = fromX + 12;
                 let pathData = '';
@@ -1875,10 +1952,10 @@ class GanttView {
 
         return `
             <defs>
-                <marker id="arrowhead-slate" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <marker id="arrowhead-slate${sfx}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
                 </marker>
-                <marker id="arrowhead-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <marker id="arrowhead-red${sfx}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
                 </marker>
             </defs>
@@ -3210,6 +3287,30 @@ class ExcelExporter {
         const wsCal = window.XLSX.utils.json_to_sheet(calendarData);
         window.XLSX.utils.book_append_sheet(wb, wsCal, 'Project Calendar');
 
+        // Sheet 5: Baseline History (every captured baseline vs current schedule)
+        const baselineList = BaselineEngine.getBaselines(tasks);
+        if (baselineList.length > 0) {
+            const historyData = tasks.map(t => {
+                const row = {
+                    'WBS': t.wbs,
+                    'Activity Name': t.name,
+                    'Current Start': CalendarEngine.formatDate(t.start),
+                    'Current Finish': CalendarEngine.formatDate(t.finish),
+                    'Progress (%)': t.progress || 0,
+                    'Status': t.status
+                };
+                baselineList.forEach(b => {
+                    const snap = (t.baselines || []).find(x => x.id === b.id);
+                    row[`${b.label} Start`] = snap ? CalendarEngine.formatDate(snap.start) : '';
+                    row[`${b.label} Finish`] = snap ? CalendarEngine.formatDate(snap.finish) : '';
+                    row[`${b.label} Finish Var (d)`] = snap
+                        ? Math.round((new Date(t.finish) - new Date(snap.finish)) / 86400000) : '';
+                });
+                return row;
+            });
+            window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(historyData), 'Baseline History');
+        }
+
         // Download Excel File
         const fileName = `${(projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_')}.xlsx`;
         window.XLSX.writeFile(wb, fileName);
@@ -3248,36 +3349,129 @@ class ExcelExporter {
 
 // --- Module: js/export/printEngine.js ---
 /**
- * Print Engine: Targeted print styles and PDF export for individual views (Gantt-only, WBS-only, Milestones-only)
+ * Print Engine: renders the full activity table, full Gantt and milestones into an off-screen
+ * container (independent of scroll/collapse state of the live views) and prints that.
  */
+
+
+
+
+
+
+// Printable content width in CSS px (page minus 10mm margins)
+const PAGE_WIDTH_PX = { A4: 1047, A3: 1512 };
 
 class PrintEngine {
 
-    static printView(target = 'all') {
-        const body = document.body;
+    static printView(target = 'all', ctx = {}) {
+        const tasks = ctx.tasks || [];
 
-        // Remove existing print class modifiers
-        body.classList.remove('print-gantt-only', 'print-wbs-only', 'print-milestones-only');
+        this.cleanup();
 
-        if (target === 'gantt') {
-            body.classList.add('print-gantt-only');
-        } else if (target === 'wbs') {
-            body.classList.add('print-wbs-only');
-        } else if (target === 'milestones') {
-            body.classList.add('print-milestones-only');
+        const root = document.createElement('div');
+        root.id = 'print-root';
+        document.body.appendChild(root);
+
+        let pageSize = 'A4';
+
+        if (target === 'wbs' || target === 'all') {
+            root.appendChild(this.buildSection(ctx.title, this.renderTable(tasks)));
         }
 
-        // Trigger browser native print / PDF save dialog
-        setTimeout(() => {
-            window.print();
-            // Clean up after print dialog closes
-            setTimeout(() => {
-                body.classList.remove('print-gantt-only', 'print-wbs-only', 'print-milestones-only');
-            }, 500);
-        }, 100);
+        if (target === 'gantt' || target === 'all') {
+            pageSize = 'A3';
+            root.appendChild(this.buildGantt(ctx, target === 'all'));
+        }
+
+        if (target === 'milestones') {
+            const holder = this.buildSection(ctx.title, '');
+            const inner = document.createElement('div');
+            new MilestonesView(inner).render(tasks);
+            holder.appendChild(inner);
+            root.appendChild(holder);
+        }
+
+        const style = document.createElement('style');
+        style.id = 'print-page-style';
+        style.textContent = `@page { size: ${pageSize} landscape; margin: 10mm; }`;
+        document.head.appendChild(style);
+
+        document.body.classList.add('printing-custom');
+        window.addEventListener('afterprint', () => this.cleanup(), { once: true });
+
+        // Give the Tailwind CDN a moment to generate styles for the new nodes
+        setTimeout(() => window.print(), 300);
+    }
+
+    static cleanup() {
+        document.body.classList.remove('printing-custom');
+        const root = document.getElementById('print-root');
+        if (root) root.remove();
+        const style = document.getElementById('print-page-style');
+        if (style) style.remove();
+    }
+
+    static buildSection(title, html, breakBefore = false) {
+        const section = document.createElement('section');
+        if (breakBefore) section.className = 'print-page-break';
+        section.innerHTML = `<h1 style="font-size:14pt;font-weight:700;margin:0 0 6px;">${this.esc(title || 'Project Schedule')}</h1>${html}`;
+        return section;
+    }
+
+    static buildGantt(ctx, breakBefore) {
+        const section = this.buildSection(ctx.title, '', breakBefore);
+        const holder = document.createElement('div');
+        section.appendChild(holder);
+
+        const gantt = new GanttView(holder, null);
+        gantt.printMode = true;
+        gantt.zoom = ctx.zoom || 'Week';
+        gantt.showCriticalPath = !!ctx.showCriticalPath;
+        gantt.render(ctx.tasks, ctx.calendar);
+
+        // Scale the whole timeline to fit the page width instead of cropping it
+        const scale = Math.min(1, PAGE_WIDTH_PX.A3 / (gantt.timelineWidth + 4));
+        holder.style.zoom = String(scale);
+        return section;
+    }
+
+    static renderTable(tasks) {
+        const fmt = (d) => CalendarEngine.formatDate(d);
+        const th = 'border:1px solid #94a3b8;padding:3px 5px;background:#e2e8f0;text-align:left;font-size:8pt;';
+        const td = 'border:1px solid #cbd5e1;padding:3px 5px;font-size:8pt;vertical-align:top;';
+
+        const rows = tasks.map(t => {
+            const v = BaselineEngine.getVariance(t);
+            const depth = (t.wbs || '').split('.').length - 1;
+            return `<tr style="${t.isSummary ? 'font-weight:700;background:#f1f5f9;' : ''}">
+                <td style="${td}">${this.esc(t.wbs)}</td>
+                <td style="${td}padding-left:${5 + depth * 12}px;">${this.esc(t.name)}</td>
+                <td style="${td}">${this.esc(t.workstream)}</td>
+                <td style="${td}">${this.esc(t.stage)}</td>
+                <td style="${td}">${this.esc(t.getFormattedAssignments())}</td>
+                <td style="${td}">${this.esc(t.status)}</td>
+                <td style="${td}text-align:center;">${t.progress || 0}%</td>
+                <td style="${td}text-align:center;">${t.duration}</td>
+                <td style="${td}white-space:nowrap;">${fmt(t.start)}</td>
+                <td style="${td}white-space:nowrap;">${fmt(t.finish)}</td>
+                <td style="${td}">${this.esc(t.predecessors || '')}</td>
+                <td style="${td}">${v.hasBaseline ? this.esc(v.statusText) : ''}</td>
+            </tr>`;
+        }).join('');
+
+        return `<table style="width:100%;border-collapse:collapse;">
+            <thead style="display:table-header-group;"><tr>
+                ${['WBS', 'Activity', 'Stream', 'Stage', 'Assigned', 'Status', 'Done', 'Dur (d)', 'Start', 'Finish', 'Predecessors', 'Variance']
+                    .map(h => `<th style="${th}">${h}</th>`).join('')}
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    static esc(str) {
+        return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 }
-
 
 
 // --- Module: js/app.js ---
@@ -3380,7 +3574,15 @@ class ProjectManagementApp {
         const titleInput = document.getElementById('project-title-input');
         if (titleInput) titleInput.value = this.projectTitle;
 
-        // Update Baseline KPI Summary Pill in Header
+        // Update Baseline selector and KPI Summary Pill in Header
+        const baselineSelect = document.getElementById('baseline-select');
+        if (baselineSelect) {
+            const list = BaselineEngine.getBaselines(this.tasks);
+            const activeId = BaselineEngine.getActiveBaselineId(this.tasks);
+            baselineSelect.innerHTML = '<option value="">No baseline</option>' + list.map(b =>
+                `<option value="${b.id}" ${b.id === activeId ? 'selected' : ''}>${b.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')}</option>`
+            ).join('');
+        }
         const metrics = BaselineEngine.getProjectBaselineMetrics(this.tasks);
         const kpiBadge = document.getElementById('header-baseline-kpi');
         if (kpiBadge) {
@@ -3455,7 +3657,8 @@ class ProjectManagementApp {
     handleTaskChange(taskId, actionOrField, value) {
         if (!actionOrField) return;
 
-        if (actionOrField === 'add-task') {
+        if (actionOrField === 'add-task' || actionOrField === 'add-milestone') {
+            const isMs = actionOrField === 'add-milestone';
             let parentId = null;
             let stage = 'EVT';
             let workstream = 'HW';
@@ -3490,11 +3693,12 @@ class ProjectManagementApp {
             }
 
             const newTask = new Task({
-                name: 'New Activity',
+                name: isMs ? 'New Milestone' : 'New Activity',
                 stage: stage,
                 workstream: workstream,
                 parentId: parentId,
-                duration: 5,
+                duration: isMs ? 0 : 5,
+                isMilestone: isMs,
                 start: startDate
             });
 
@@ -3514,7 +3718,7 @@ class ProjectManagementApp {
             const task = this.tasks.find(t => t.id === taskId);
             if (task) {
                 task[actionOrField] = value;
-                // Finish is recalculated by the scheduler using the project calendar
+                if (actionOrField === 'duration') task.isMilestone = value === 0;
             }
         }
 
@@ -3669,10 +3873,20 @@ class ProjectManagementApp {
         const btnSetBaseline = document.getElementById('btn-set-baseline');
         if (btnSetBaseline) {
             btnSetBaseline.onclick = () => {
-                if (confirm('Set current project schedule as target Baseline?')) {
-                    BaselineEngine.captureBaseline(this.tasks);
-                    this.renderAllViews();
-                }
+                const next = BaselineEngine.getBaselines(this.tasks).length;
+                const label = prompt('Name for the new baseline (previous baselines are kept):', `Baseline ${next}`);
+                if (label === null) return;
+                BaselineEngine.captureBaseline(this.tasks, label);
+                this.renderAllViews();
+            };
+        }
+
+        const baselineSelect = document.getElementById('baseline-select');
+        if (baselineSelect) {
+            baselineSelect.onchange = (e) => {
+                const v = e.target.value;
+                BaselineEngine.setActiveBaseline(this.tasks, v === '' ? null : parseInt(v, 10));
+                this.renderAllViews();
             };
         }
 
@@ -3750,7 +3964,13 @@ class ProjectManagementApp {
             printSelect.onchange = (e) => {
                 const target = e.target.value;
                 if (target) {
-                    PrintEngine.printView(target);
+                    PrintEngine.printView(target, {
+                        title: this.projectTitle,
+                        tasks: this.tasks,
+                        calendar: this.calendar,
+                        zoom: this.ganttView ? this.ganttView.zoom : 'Week',
+                        showCriticalPath: this.ganttView ? this.ganttView.showCriticalPath : false
+                    });
                     e.target.value = '';
                 }
             };

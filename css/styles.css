@@ -1,4 +1,4 @@
-/* Hardware PM Tool Custom Styles & Print Media Rules */
+﻿/* Hardware PM Tool Custom Styles & Print Media Rules */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -46,48 +46,37 @@ body {
     background-color: #6366f1;
 }
 
-/* TARGETED PRINT MEDIA STYLES */
-@media print {
-    /* Hide top app header, modals, toolbar controls */
-    header, .app-toolbar, .gantt-toolbar, .wbs-toolbar, modal, button, input[type="text"]::placeholder {
-        display: none !important;
-    }
-
-    body {
-        background-color: white !important;
-        font-size: 10pt;
-    }
-
-    /* Print Gantt Chart ONLY */
-    body.print-gantt-only .wbs-grid-container {
-        display: none !important;
-    }
-    body.print-gantt-only .gantt-container {
-        width: 100% !important;
-        display: block !important;
-    }
-
-    /* Print WBS Table ONLY */
-    body.print-wbs-only .gantt-container {
-        display: none !important;
-    }
-    body.print-wbs-only .wbs-grid-container {
-        width: 100% !important;
-        display: block !important;
-    }
-
-    /* Print Milestones ONLY */
-    body.print-milestones-only .main-split-view {
-        display: none !important;
-    }
-    body.print-milestones-only .milestones-view {
-        display: block !important;
-        width: 100% !important;
-    }
-
-    /* Page Breaks */
-    .page-break {
-        page-break-after: always;
-    }
+/* PRINT: only the off-screen #print-root (full table / full Gantt) is printed */
+#print-root {
+    display: none;
 }
 
+@media print {
+    * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    body.printing-custom {
+        display: block !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: white !important;
+    }
+
+    body.printing-custom > *:not(#print-root) {
+        display: none !important;
+    }
+
+    body.printing-custom #print-root {
+        display: block !important;
+    }
+
+    #print-root .print-page-break {
+        break-before: page;
+    }
+
+    #print-root tr {
+        break-inside: avoid;
+    }
+}

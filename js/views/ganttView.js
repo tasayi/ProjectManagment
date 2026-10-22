@@ -18,6 +18,8 @@ export class GanttView {
         this.dayWidth = 28;
         this.rowHeight = 33;
         this.calendar = null;
+        this.printMode = false;
+        this.timelineWidth = 0;
     }
 
     render(tasks, calendar) {
@@ -36,12 +38,13 @@ export class GanttView {
         else if (this.zoom === 'Month') this.dayWidth = 14;
 
         const timelineWidth = Math.max(800, this.totalDays * this.dayWidth);
+        this.timelineWidth = timelineWidth;
         const visibleTasks = this.getVisibleTasks(tasks);
 
         const html = `
-            <div class="gantt-container flex flex-col h-full bg-white overflow-hidden select-none">
+            <div class="gantt-container flex flex-col ${this.printMode ? '' : 'h-full overflow-hidden'} bg-white select-none">
                 <!-- Gantt Controls Toolbar -->
-                <div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
+                ${this.printMode ? '' : `<div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
                     <!-- Zoom Controls -->
                     <div class="flex items-center gap-1">
                         <span class="text-slate-500 font-semibold uppercase text-[10px]">Zoom:</span>
@@ -63,13 +66,13 @@ export class GanttView {
                             <span>Baseline Shadows</span>
                         </label>
                     </div>
-                </div>
+                </div>`}
 
                 <!-- Timeline View Area -->
-                <div class="gantt-scroll-pane flex-1 overflow-auto relative bg-white">
+                <div class="gantt-scroll-pane ${this.printMode ? '' : 'flex-1 overflow-auto'} relative bg-white">
                     <div style="width: ${timelineWidth}px;" class="min-h-full relative">
                         <!-- Header Calendar Row -->
-                        <div class="gantt-header sticky top-0 z-20 bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
+                        <div class="gantt-header ${this.printMode ? '' : 'sticky top-0 z-20'} bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
                             ${this.renderHeader(timelineWidth)}
                         </div>
 
@@ -94,7 +97,7 @@ export class GanttView {
         `;
 
         this.container.innerHTML = html;
-        this.attachEventListeners(visibleTasks);
+        if (!this.printMode) this.attachEventListeners(visibleTasks);
     }
 
     getTimelineBounds(tasks) {
@@ -131,6 +134,7 @@ export class GanttView {
     }
 
     getVisibleTasks(tasks) {
+        if (this.printMode) return tasks;
         const hiddenIds = new Set();
         const idMap = new Map(tasks.map(t => [t.id, t]));
 
@@ -328,11 +332,11 @@ export class GanttView {
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
+            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
-                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''}
+                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''} <span class="opacity-90 font-bold">${task.progress || 0}%</span>
                 </span>
 
                 ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `
@@ -347,6 +351,7 @@ export class GanttView {
     }
 
     renderDependencies(visibleTasks) {
+        const sfx = this.printMode ? '-print' : '';
         const taskRowIndexMap = new Map(visibleTasks.map((t, idx) => [t.id, idx]));
         const paths = [];
 
@@ -370,7 +375,7 @@ export class GanttView {
                 const isCritical = this.showCriticalPath && (task.isCritical && targetTask.isCritical);
                 const strokeColor = isCritical ? '#ef4444' : '#475569';
                 const strokeWidth = isCritical ? 2.5 : 1.8;
-                const markerId = isCritical ? 'arrowhead-red' : 'arrowhead-slate';
+                const markerId = (isCritical ? 'arrowhead-red' : 'arrowhead-slate') + sfx;
 
                 const midX = fromX + 12;
                 let pathData = '';
@@ -390,10 +395,10 @@ export class GanttView {
 
         return `
             <defs>
-                <marker id="arrowhead-slate" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <marker id="arrowhead-slate${sfx}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
                 </marker>
-                <marker id="arrowhead-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <marker id="arrowhead-red${sfx}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
                 </marker>
             </defs>

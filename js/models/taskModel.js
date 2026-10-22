@@ -42,12 +42,28 @@ export class Task {
         this.assignedTo = data.assignedTo || (this.assignedResources.length > 0 ? this.assignedResources[0].name : '');
         this.notes = data.notes || '';
 
-        // Baseline Snapshot Data
-        this.baseline = data.baseline ? {
-            start: data.baseline.start,
-            finish: data.baseline.finish,
-            duration: data.baseline.duration
-        } : null;
+        // Baseline history: every captured snapshot, plus the active one used for variance
+        this.baselines = Array.isArray(data.baselines) ? data.baselines.map(b => ({ ...b })) : [];
+        if (data.baseline) {
+            let active = this.baselines.find(b => b.id === data.baseline.id);
+            if (!active) {
+                const nextId = this.baselines.reduce((m, b) => Math.max(m, b.id), -1) + 1;
+                active = {
+                    id: typeof data.baseline.id === 'number' ? data.baseline.id : nextId,
+                    label: data.baseline.label || `Baseline ${nextId}`,
+                    date: data.baseline.date || '',
+                    start: data.baseline.start,
+                    finish: data.baseline.finish,
+                    duration: data.baseline.duration,
+                    progress: data.baseline.progress,
+                    status: data.baseline.status
+                };
+                this.baselines.push(active);
+            }
+            this.baseline = active;
+        } else {
+            this.baseline = null;
+        }
 
         // Calculated Engine Properties (Transient)
         this.earlyStart = null;

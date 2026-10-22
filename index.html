@@ -54,8 +54,11 @@
                 <span>Calendar</span>
             </button>
 
+            <!-- Active Baseline Selector -->
+            <select id="baseline-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none max-w-[150px]" title="Baseline used for variance comparison"></select>
+
             <!-- Set Baseline -->
-            <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Snapshot current schedule as baseline">
+            <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Capture a new baseline (previous baselines are kept)">
                 <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                 Baseline
             </button>

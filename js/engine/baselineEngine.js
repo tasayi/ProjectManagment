@@ -5,27 +5,75 @@
 export class BaselineEngine {
 
     /**
-     * Capture current project state as the Baseline
+     * Capture current project state as a NEW baseline; earlier baselines are kept and the new one becomes active
      */
-    static captureBaseline(tasks) {
-        let count = 0;
+    static captureBaseline(tasks, label = '') {
+        const id = this.getBaselines(tasks).reduce((m, b) => Math.max(m, b.id), -1) + 1;
+        const name = (label || '').trim() || `Baseline ${id}`;
+        const date = new Date().toISOString();
+
         tasks.forEach(t => {
-            t.baseline = {
+            const snap = {
+                id, label: name, date,
                 start: t.start,
                 finish: t.finish,
-                duration: t.duration
+                duration: t.duration,
+                progress: t.progress || 0,
+                status: t.status
             };
-            count++;
+            t.baselines = [...(t.baselines || []), snap];
+            t.baseline = snap;
         });
-        return count;
+        return tasks.length;
     }
 
     /**
-     * Clear baseline snapshot
+     * Distinct baselines across all tasks, oldest first
+     */
+    static getBaselines(tasks) {
+        const map = new Map();
+        tasks.forEach(t => (t.baselines || []).forEach(b => {
+            if (!map.has(b.id)) map.set(b.id, { id: b.id, label: b.label, date: b.date });
+        }));
+        return [...map.values()].sort((a, b) => a.id - b.id);
+    }
+
+    static getActiveBaselineId(tasks) {
+        const t = tasks.find(x => x.baseline);
+        return t ? t.baseline.id : null;
+    }
+
+    /**
+     * Choose which baseline variances are measured against (null = none)
+     */
+    static setActiveBaseline(tasks, id) {
+        tasks.forEach(t => {
+            t.baseline = id === null || id === undefined
+                ? null
+                : (t.baselines || []).find(b => b.id === id) || null;
+        });
+    }
+
+    /**
+     * Finish-date drift of a task against every baseline captured, for tooltips and exports
+     */
+    static getHistory(task) {
+        return (task.baselines || []).map(b => ({
+            id: b.id,
+            label: b.label,
+            start: b.start,
+            finish: b.finish,
+            finishVarianceDays: Math.round((new Date(task.finish) - new Date(b.finish)) / 86400000)
+        }));
+    }
+
+    /**
+     * Clear all baselines
      */
     static clearBaseline(tasks) {
         tasks.forEach(t => {
             t.baseline = null;
+            t.baselines = [];
         });
     }
 

@@ -82,6 +82,30 @@ export class ExcelExporter {
         const wsCal = window.XLSX.utils.json_to_sheet(calendarData);
         window.XLSX.utils.book_append_sheet(wb, wsCal, 'Project Calendar');
 
+        // Sheet 5: Baseline History (every captured baseline vs current schedule)
+        const baselineList = BaselineEngine.getBaselines(tasks);
+        if (baselineList.length > 0) {
+            const historyData = tasks.map(t => {
+                const row = {
+                    'WBS': t.wbs,
+                    'Activity Name': t.name,
+                    'Current Start': CalendarEngine.formatDate(t.start),
+                    'Current Finish': CalendarEngine.formatDate(t.finish),
+                    'Progress (%)': t.progress || 0,
+                    'Status': t.status
+                };
+                baselineList.forEach(b => {
+                    const snap = (t.baselines || []).find(x => x.id === b.id);
+                    row[`${b.label} Start`] = snap ? CalendarEngine.formatDate(snap.start) : '';
+                    row[`${b.label} Finish`] = snap ? CalendarEngine.formatDate(snap.finish) : '';
+                    row[`${b.label} Finish Var (d)`] = snap
+                        ? Math.round((new Date(t.finish) - new Date(snap.finish)) / 86400000) : '';
+                });
+                return row;
+            });
+            window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(historyData), 'Baseline History');
+        }
+
         // Download Excel File
         const fileName = `${(projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_')}.xlsx`;
         window.XLSX.writeFile(wb, fileName);

@@ -19,6 +19,7 @@ export class WbsGridView {
             status: true,
             assignedTo: true,
             duration: true,
+            progress: true,
             dates: true,
             predecessors: true,
             leadTime: true,
@@ -40,6 +41,9 @@ export class WbsGridView {
                         <button id="btn-add-task" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium flex items-center gap-1 shadow-sm transition">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             Add Activity
+                        </button>
+                        <button id="btn-add-milestone" title="Add a zero-duration milestone (diamond on the Gantt)" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-medium flex items-center gap-1 shadow-sm transition">
+                            <span>&#9670;</span> Add Milestone
                         </button>
                         <div class="h-4 w-px bg-slate-300 mx-1"></div>
                         <button id="btn-indent" title="Indent (Make Child)" class="p-1 hover:bg-slate-200 text-slate-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
@@ -74,6 +78,7 @@ export class WbsGridView {
                                 ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 min-w-[140px] border-r border-slate-200">Assigned Engineers</th>' : ''}
                                 ${this.visibleColumns.status ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Status</th>' : ''}
                                 ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
+                                ${this.visibleColumns.progress ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Work completed">Done %</th>' : ''}
                                 ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Procurement Lead Time">Lead (d)</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Start</th>' : ''}
                                 ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Finish</th>' : ''}
@@ -211,6 +216,13 @@ export class WbsGridView {
                         </td>
                     ` : ''}
 
+                    <!-- Progress -->
+                    ${this.visibleColumns.progress ? `
+                        <td class="py-1 px-1 text-center border-r border-slate-200">
+                            <input type="number" min="0" max="100" data-field="progress" data-id="${t.id}" value="${t.progress || 0}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 font-semibold rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-slate-200 focus:border-indigo-500 rounded py-0.5 text-xs focus:outline-none"'}>
+                        </td>
+                    ` : ''}
+
                     <!-- Procurement Lead Time -->
                     ${this.visibleColumns.leadTime ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
@@ -242,7 +254,7 @@ export class WbsGridView {
                     <!-- Variance -->
                     ${this.visibleColumns.variance ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
-                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${variance.badgeClass}">
+                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${variance.badgeClass}" title="${this.escapeHtml(BaselineEngine.getHistory(t).map(h => `${h.label}: finish ${CalendarEngine.formatDate(h.finish)} (${h.finishVarianceDays > 0 ? '+' : ''}${h.finishVarianceDays}d)`).join('\n'))}">
                                 ${variance.statusText}
                             </span>
                         </td>
@@ -368,8 +380,9 @@ export class WbsGridView {
                     }
                 }
 
-                if (field === 'duration' || field === 'leadTime') {
+                if (field === 'duration' || field === 'leadTime' || field === 'progress') {
                     value = parseInt(value, 10) || 0;
+                    if (field === 'progress') value = Math.max(0, Math.min(100, value));
                 }
 
                 if (this.onTaskChange) {
@@ -381,6 +394,9 @@ export class WbsGridView {
         // Toolbar buttons
         const addBtn = this.container.querySelector('#btn-add-task');
         if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
+
+        const addMsBtn = this.container.querySelector('#btn-add-milestone');
+        if (addMsBtn) addMsBtn.onclick = () => this.onTaskChange(null, 'add-milestone');
 
         const indentBtn = this.container.querySelector('#btn-indent');
         if (indentBtn) indentBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'indent');
