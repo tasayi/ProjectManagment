@@ -1,4 +1,4 @@
-﻿/* Hardware PM Tool Custom Styles & Print Media Rules */
+/* Hardware PM Tool Custom Styles & Print Media Rules */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -43,6 +43,22 @@ body {
 }
 
 .split-resizer:hover, .split-resizer.is-dragging {
+    background-color: #6366f1;
+}
+
+/* Table Column Resizer */
+.col-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 20;
+}
+
+.col-resizer:hover, .col-resizer.is-resizing {
     background-color: #6366f1;
 }
 

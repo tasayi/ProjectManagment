@@ -6,6 +6,38 @@ import { WORKSTREAMS, HARDWARE_STAGES, STATUS_PILLS, registerCustomWorkstream, r
 import { BaselineEngine } from '../engine/baselineEngine.js';
 import { CalendarEngine } from '../engine/calendarEngine.js';
 
+export const DEFAULT_COLUMN_WIDTHS = {
+    wbs: 48,
+    name: null, // Elastic: fills available space
+    workstream: 72,
+    stage: 60,
+    assignedTo: 130,
+    status: 78,
+    duration: 50,
+    progress: 50,
+    leadTime: 50,
+    start: 86,
+    finish: 72,
+    predecessors: 80,
+    variance: 70
+};
+
+export const MIN_COLUMN_WIDTHS = {
+    wbs: 36,
+    name: 110,
+    workstream: 48,
+    stage: 46,
+    assignedTo: 70,
+    status: 55,
+    duration: 40,
+    progress: 40,
+    leadTime: 40,
+    start: 78,
+    finish: 66,
+    predecessors: 50,
+    variance: 50
+};
+
 export class WbsGridView {
     constructor(containerElement, onTaskChange, onTaskSelect) {
         this.container = containerElement;
@@ -25,6 +57,36 @@ export class WbsGridView {
             leadTime: true,
             variance: true
         };
+        this.columnWidths = this.loadColumnWidths();
+    }
+
+    loadColumnWidths() {
+        try {
+            const saved = localStorage.getItem('wbs_grid_column_widths_v2');
+            if (saved) {
+                return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(saved) };
+            }
+            // Migrate from v1 and reset cached inflated date widths
+            const v1 = localStorage.getItem('wbs_grid_column_widths');
+            if (v1) {
+                const parsed = JSON.parse(v1);
+                if (parsed.start && parsed.start > 86) parsed.start = DEFAULT_COLUMN_WIDTHS.start;
+                if (parsed.finish && parsed.finish > 72) parsed.finish = DEFAULT_COLUMN_WIDTHS.finish;
+                if (parsed.name && parsed.name <= 220) parsed.name = null;
+                return { ...DEFAULT_COLUMN_WIDTHS, ...parsed };
+            }
+        } catch (e) {
+            console.warn('Failed to load column widths:', e);
+        }
+        return { ...DEFAULT_COLUMN_WIDTHS };
+    }
+
+    saveColumnWidths() {
+        try {
+            localStorage.setItem('wbs_grid_column_widths_v2', JSON.stringify(this.columnWidths));
+        } catch (e) {
+            console.warn('Failed to save column widths:', e);
+        }
     }
 
     render(tasks, resources = []) {
@@ -68,22 +130,98 @@ export class WbsGridView {
 
                 <!-- Table Content Container -->
                 <div class="wbs-table-wrapper flex-1 overflow-auto">
-                    <table class="w-full text-left border-collapse text-xs">
+                    <table class="w-full text-left border-collapse text-xs" style="table-layout: fixed; min-width: 780px;">
+                        <colgroup>
+                            <col data-col="wbs" style="width: ${this.columnWidths.wbs}px;">
+                            ${this.columnWidths.name ? `<col data-col="name" style="width: ${this.columnWidths.name}px;">` : '<col data-col="name">'}
+                            ${this.visibleColumns.workstream ? `<col data-col="workstream" style="width: ${this.columnWidths.workstream}px;">` : ''}
+                            ${this.visibleColumns.stage ? `<col data-col="stage" style="width: ${this.columnWidths.stage}px;">` : ''}
+                            ${this.visibleColumns.assignedTo ? `<col data-col="assignedTo" style="width: ${this.columnWidths.assignedTo}px;">` : ''}
+                            ${this.visibleColumns.status ? `<col data-col="status" style="width: ${this.columnWidths.status}px;">` : ''}
+                            ${this.visibleColumns.duration ? `<col data-col="duration" style="width: ${this.columnWidths.duration}px;">` : ''}
+                            ${this.visibleColumns.progress ? `<col data-col="progress" style="width: ${this.columnWidths.progress}px;">` : ''}
+                            ${this.visibleColumns.leadTime ? `<col data-col="leadTime" style="width: ${this.columnWidths.leadTime}px;">` : ''}
+                            ${this.visibleColumns.dates ? `<col data-col="start" style="width: ${this.columnWidths.start}px;">` : ''}
+                            ${this.visibleColumns.dates ? `<col data-col="finish" style="width: ${this.columnWidths.finish}px;">` : ''}
+                            ${this.visibleColumns.predecessors ? `<col data-col="predecessors" style="width: ${this.columnWidths.predecessors}px;">` : ''}
+                            ${this.visibleColumns.variance ? `<col data-col="variance" style="width: ${this.columnWidths.variance}px;">` : ''}
+                        </colgroup>
                         <thead class="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-slate-600 font-semibold uppercase tracking-wider">
                             <tr>
-                                <th class="py-2 px-2 w-12 text-center border-r border-slate-200">WBS</th>
-                                <th class="py-2 px-3 min-w-[180px] border-r border-slate-200">Activity Name</th>
-                                ${this.visibleColumns.workstream ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Stream</th>' : ''}
-                                ${this.visibleColumns.stage ? '<th class="py-2 px-2 w-16 border-r border-slate-200">Stage</th>' : ''}
-                                ${this.visibleColumns.assignedTo ? '<th class="py-2 px-2 min-w-[140px] border-r border-slate-200">Assigned Engineers</th>' : ''}
-                                ${this.visibleColumns.status ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Status</th>' : ''}
-                                ${this.visibleColumns.duration ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200">Dur (d)</th>' : ''}
-                                ${this.visibleColumns.progress ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Work completed">Done %</th>' : ''}
-                                ${this.visibleColumns.leadTime ? '<th class="py-2 px-2 w-16 text-center border-r border-slate-200" title="Procurement Lead Time">Lead (d)</th>' : ''}
-                                ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Start</th>' : ''}
-                                ${this.visibleColumns.dates ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Finish</th>' : ''}
-                                ${this.visibleColumns.predecessors ? '<th class="py-2 px-2 w-24 border-r border-slate-200">Predecessors</th>' : ''}
-                                ${this.visibleColumns.variance ? '<th class="py-2 px-2 w-24 text-center border-r border-slate-200">Variance</th>' : ''}
+                                <th data-col="wbs" style="width: ${this.columnWidths.wbs}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none">
+                                    <span>WBS</span>
+                                    <div class="col-resizer" data-col="wbs" title="Drag to resize column (double-click to reset)"></div>
+                                </th>
+                                <th data-col="name" ${this.columnWidths.name ? `style="width: ${this.columnWidths.name}px;"` : 'style="min-width: 140px;"'} class="relative py-2 px-2 border-r border-slate-200 select-none">
+                                    <span>Activity Name</span>
+                                    <div class="col-resizer" data-col="name" title="Drag to resize column (double-click to reset)"></div>
+                                </th>
+                                ${this.visibleColumns.workstream ? `
+                                    <th data-col="workstream" style="width: ${this.columnWidths.workstream}px;" class="relative py-2 px-1 border-r border-slate-200 select-none">
+                                        <span>Stream</span>
+                                        <div class="col-resizer" data-col="workstream" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.stage ? `
+                                    <th data-col="stage" style="width: ${this.columnWidths.stage}px;" class="relative py-2 px-1 border-r border-slate-200 select-none">
+                                        <span>Stage</span>
+                                        <div class="col-resizer" data-col="stage" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.assignedTo ? `
+                                    <th data-col="assignedTo" style="width: ${this.columnWidths.assignedTo}px;" class="relative py-2 px-1.5 border-r border-slate-200 select-none">
+                                        <span>Assigned Engineers</span>
+                                        <div class="col-resizer" data-col="assignedTo" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.status ? `
+                                    <th data-col="status" style="width: ${this.columnWidths.status}px;" class="relative py-2 px-1.5 border-r border-slate-200 select-none">
+                                        <span>Status</span>
+                                        <div class="col-resizer" data-col="status" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.duration ? `
+                                    <th data-col="duration" style="width: ${this.columnWidths.duration}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none">
+                                        <span>Dur (d)</span>
+                                        <div class="col-resizer" data-col="duration" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.progress ? `
+                                    <th data-col="progress" style="width: ${this.columnWidths.progress}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Work completed">
+                                        <span>Done %</span>
+                                        <div class="col-resizer" data-col="progress" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.leadTime ? `
+                                    <th data-col="leadTime" style="width: ${this.columnWidths.leadTime}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Procurement Lead Time">
+                                        <span>Lead (d)</span>
+                                        <div class="col-resizer" data-col="leadTime" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.dates ? `
+                                    <th data-col="start" style="width: ${this.columnWidths.start}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none">
+                                        <span>Start</span>
+                                        <div class="col-resizer" data-col="start" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.dates ? `
+                                    <th data-col="finish" style="width: ${this.columnWidths.finish}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none">
+                                        <span>Finish</span>
+                                        <div class="col-resizer" data-col="finish" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.predecessors ? `
+                                    <th data-col="predecessors" style="width: ${this.columnWidths.predecessors}px;" class="relative py-2 px-1.5 border-r border-slate-200 select-none">
+                                        <span>Predecessors</span>
+                                        <div class="col-resizer" data-col="predecessors" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.variance ? `
+                                    <th data-col="variance" style="width: ${this.columnWidths.variance}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none">
+                                        <span>Variance</span>
+                                        <div class="col-resizer" data-col="variance" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
                             </tr>
                         </thead>
                         <tbody id="wbs-tbody" class="divide-y divide-slate-200 font-normal text-slate-800 bg-white">
@@ -232,12 +370,12 @@ export class WbsGridView {
 
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
-                        <td class="py-1 px-1 border-r border-slate-200">
-                            <div class="relative flex items-center">
-                                <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center font-mono"' : 'class="w-full border border-slate-200 rounded py-0.5 pr-6 text-[11px] text-center focus:outline-none focus:border-indigo-500 font-mono"'}>
+                        <td class="py-1 px-0.5 border-r border-slate-200">
+                            <div class="flex items-center gap-0.5">
+                                <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 px-0 text-[11px] text-center font-mono"' : 'class="flex-1 min-w-0 border border-slate-200 rounded py-0.5 px-0 text-[11px] text-center focus:outline-none focus:border-indigo-500 font-mono"'}>
                                 ${!t.isSummary ? `
-                                    <button type="button" data-action="pick-calendar" data-id="${t.id}" title="Click to open calendar pop-up" class="absolute right-1 text-slate-400 hover:text-indigo-600 transition p-0.5">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                    <button type="button" data-action="pick-calendar" data-id="${t.id}" title="Click to open calendar pop-up" class="flex-shrink-0 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 border border-slate-200 rounded transition p-0.5 bg-white shadow-2xs">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                     </button>
                                     <input type="date" data-picker-for="${t.id}" value="${t.start || ''}" class="sr-only" tabindex="-1">
                                 ` : ''}
@@ -247,8 +385,8 @@ export class WbsGridView {
 
                     <!-- Finish Date -->
                     ${this.visibleColumns.dates ? `
-                        <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="text" data-field="finish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.finish)}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center">
+                        <td class="py-1 px-0.5 border-r border-slate-200">
+                            <input type="text" data-field="finish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.finish)}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 px-0 text-[11px] text-center font-mono">
                         </td>
                     ` : ''}
 
@@ -454,6 +592,72 @@ export class WbsGridView {
                 this.filterTasks(query);
             };
         }
+
+        // Interactive Column Resizing
+        this.initColumnResizers();
+    }
+
+    initColumnResizers() {
+        const table = this.container.querySelector('table');
+        if (!table) return;
+
+        this.container.querySelectorAll('.col-resizer').forEach(resizer => {
+            resizer.onmousedown = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const col = resizer.getAttribute('data-col');
+                const startX = e.clientX;
+                const th = resizer.closest('th');
+                if (!th) return;
+
+                const startWidth = th.offsetWidth;
+                const minWidth = MIN_COLUMN_WIDTHS[col] || 40;
+                const colElem = table.querySelector(`col[data-col="${col}"]`);
+
+                resizer.classList.add('is-resizing');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+
+                const onMouseMove = (moveEvt) => {
+                    const delta = moveEvt.clientX - startX;
+                    const newWidth = Math.max(minWidth, startWidth + delta);
+                    this.columnWidths[col] = newWidth;
+                    th.style.width = `${newWidth}px`;
+                    if (colElem) colElem.style.width = `${newWidth}px`;
+                };
+
+                const onMouseUp = () => {
+                    resizer.classList.remove('is-resizing');
+                    document.body.style.cursor = 'default';
+                    document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    this.saveColumnWidths();
+                };
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            };
+
+            resizer.ondblclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const col = resizer.getAttribute('data-col');
+                const defaultWidth = DEFAULT_COLUMN_WIDTHS[col];
+                this.columnWidths[col] = defaultWidth;
+                this.saveColumnWidths();
+                const th = resizer.closest('th');
+                const colElem = table.querySelector(`col[data-col="${col}"]`);
+                if (defaultWidth) {
+                    if (th) th.style.width = `${defaultWidth}px`;
+                    if (colElem) colElem.style.width = `${defaultWidth}px`;
+                } else {
+                    if (th) th.style.width = '';
+                    if (colElem) colElem.style.width = '';
+                }
+            };
+        });
     }
 
     openAssignmentModal(taskId) {
