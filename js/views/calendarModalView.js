@@ -2,6 +2,8 @@
  * Calendar Modal View: Configures Weekly Off Days, Festive Holidays & Overtime Working Days
  */
 
+import { CalendarEngine } from '../engine/calendarEngine.js';
+
 export class CalendarModalView {
     constructor(modalContainer, onCalendarChange) {
         this.container = modalContainer;
@@ -62,7 +64,7 @@ export class CalendarModalView {
 
                             <!-- Add Holiday Form -->
                             <div class="flex items-center gap-2 pt-1">
-                                <input type="date" id="new-holiday-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <input type="text" placeholder="DD/MM/YYYY" id="new-holiday-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <input type="text" id="new-holiday-name" placeholder="Holiday Name (e.g. Diwali)" class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <button id="btn-add-holiday" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium shadow-sm transition">
                                     + Add Holiday
@@ -84,7 +86,7 @@ export class CalendarModalView {
                                             <tr><td colspan="3" class="p-3 text-center text-slate-400 italic">No holidays configured</td></tr>
                                         ` : (this.calendar.holidays || []).map((h, i) => `
                                             <tr class="hover:bg-slate-50">
-                                                <td class="p-2 font-mono font-bold text-slate-800 border-r border-slate-100">${h.date}</td>
+                                                <td class="p-2 font-mono font-bold text-slate-800 border-r border-slate-100">${CalendarEngine.formatDate(h.date)}</td>
                                                 <td class="p-2 border-r border-slate-100">${this.escapeHtml(h.name)}</td>
                                                 <td class="p-2 text-center">
                                                     <button data-action="delete-holiday" data-index="${i}" class="text-red-600 hover:text-red-800 font-bold">✕</button>
@@ -105,7 +107,7 @@ export class CalendarModalView {
 
                             <!-- Add Overtime Form -->
                             <div class="flex items-center gap-2 pt-1">
-                                <input type="date" id="new-overtime-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <input type="text" placeholder="DD/MM/YYYY" id="new-overtime-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <input type="text" id="new-overtime-note" placeholder="Note (e.g. EVT Spin Crunch Saturday)" class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <button id="btn-add-overtime" class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium shadow-sm transition">
                                     + Add Overtime
@@ -127,7 +129,7 @@ export class CalendarModalView {
                                             <tr><td colspan="3" class="p-3 text-center text-slate-400 italic">No overtime days configured</td></tr>
                                         ` : (this.calendar.overtimeDays || []).map((o, i) => `
                                             <tr class="hover:bg-amber-50/50">
-                                                <td class="p-2 font-mono font-bold text-amber-900 border-r border-slate-100">${o.date}</td>
+                                                <td class="p-2 font-mono font-bold text-amber-900 border-r border-slate-100">${CalendarEngine.formatDate(o.date)}</td>
                                                 <td class="p-2 border-r border-slate-100">${this.escapeHtml(o.note)}</td>
                                                 <td class="p-2 text-center">
                                                     <button data-action="delete-overtime" data-index="${i}" class="text-red-600 hover:text-red-800 font-bold">✕</button>
@@ -201,9 +203,11 @@ export class CalendarModalView {
             addHolidayBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-holiday-date');
                 const nameInput = this.container.querySelector('#new-holiday-name');
-                if (dateInput && nameInput && dateInput.value && nameInput.value.trim()) {
+                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
+                if (iso && nameInput && nameInput.value.trim()) {
                     this.calendar.holidays.push({
-                        date: dateInput.value,
+                        date: iso,
                         name: nameInput.value.trim()
                     });
                     this.render(this.calendar);
@@ -226,9 +230,11 @@ export class CalendarModalView {
             addOvertimeBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-overtime-date');
                 const noteInput = this.container.querySelector('#new-overtime-note');
-                if (dateInput && noteInput && dateInput.value && noteInput.value.trim()) {
+                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
+                if (iso && noteInput && noteInput.value.trim()) {
                     this.calendar.overtimeDays.push({
-                        date: dateInput.value,
+                        date: iso,
                         note: noteInput.value.trim()
                     });
                     this.render(this.calendar);

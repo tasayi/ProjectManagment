@@ -221,6 +221,8 @@ class ProjectManagementApp {
             this.indentTask(taskId);
         } else if (actionOrField === 'outdent' && taskId) {
             this.outdentTask(taskId);
+        } else if (actionOrField === 'move' && taskId) {
+            this.moveTask(taskId, value.targetId, value.position);
         } else if (actionOrField === 'delete' && taskId) {
             if (confirm('Delete selected activity and any subtasks?')) {
                 this.deleteTaskRecursive(taskId);
@@ -229,9 +231,7 @@ class ProjectManagementApp {
             const task = this.tasks.find(t => t.id === taskId);
             if (task) {
                 task[actionOrField] = value;
-                if (actionOrField === 'duration' || actionOrField === 'start') {
-                    task.finish = task.calculateFinishDate(task.start, task.duration);
-                }
+                // Finish is recalculated by the scheduler using the project calendar
             }
         }
 
@@ -257,6 +257,43 @@ class ProjectManagementApp {
 
     handleTaskSelect(taskId) {
         this.selectedTaskId = taskId;
+    }
+
+    /**
+     * Move a task (with its subtasks) before/after a target task; predecessor references follow the new WBS numbers
+     */
+    moveTask(dragId, targetId, position) {
+        if (dragId === targetId) return;
+        const dragged = this.tasks.find(t => t.id === dragId);
+        const target = this.tasks.find(t => t.id === targetId);
+        if (!dragged || !target || this.isDescendantOf(target, dragId)) return;
+
+        const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
+
+        const block = this.tasks.filter(t => t.id === dragId || this.isDescendantOf(t, dragId));
+        const blockIds = new Set(block.map(t => t.id));
+        const rest = this.tasks.filter(t => !blockIds.has(t.id));
+
+        let insertAt = rest.findIndex(t => t.id === targetId);
+        if (position === 'after') {
+            insertAt++;
+            while (insertAt < rest.length && this.isDescendantOf(rest[insertAt], targetId)) insertAt++;
+        }
+
+        dragged.parentId = target.parentId || null;
+        rest.splice(insertAt, 0, ...block);
+        this.tasks = rest;
+
+        DependencyEngine.updateWBSHierarchy(this.tasks, this.calendar);
+        this.tasks.forEach(t => {
+            const preds = parsed.get(t.id) || [];
+            if (preds.length === 0) return;
+            t.predecessors = preds.map(p => {
+                const lag = p.lag > 0 ? `+${p.lag}d` : (p.lag < 0 ? `${p.lag}d` : '');
+                return `${p.targetTask.wbs}${p.type}${lag}`;
+            }).join(', ');
+        });
+        this.selectedTaskId = dragId;
     }
 
     indentTask(taskId) {
@@ -383,6 +420,7 @@ class ProjectManagementApp {
                             this.tasks = imported.tasks;
                             this.resources = imported.resources;
                             this.calendar = imported.calendar;
+                            DependencyEngine.scheduleProject(this.tasks, this.calendar);
                             this.renderAllViews();
                         }
                     };
@@ -405,6 +443,7 @@ class ProjectManagementApp {
                         this.tasks = preset.tasks;
                         this.resources = preset.resources;
                         this.calendar = preset.calendar;
+                        DependencyEngine.scheduleProject(this.tasks, this.calendar);
                         this.renderAllViews();
                     }
                 };

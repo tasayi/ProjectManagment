@@ -456,8 +456,7 @@ class CalendarEngine {
         }
 
         // 3. Check standard weekly working days (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-        const date = new Date(dateStr);
-        const dayOfWeek = date.getDay();
+        const dayOfWeek = new Date(dateStr + 'T00:00:00Z').getUTCDay();
         const workingDays = calendar.workingDays || [1, 2, 3, 4, 5];
 
         return workingDays.includes(dayOfWeek);
@@ -486,17 +485,62 @@ class CalendarEngine {
         if (!startDateStr) return '';
         if (days <= 0) return startDateStr;
 
-        let date = new Date(startDateStr);
-        let count = 0;
+        // Task occupies working days only: snap a non-working start forward first
+        return this.shiftWorkingDays(this.nextWorkingDay(startDateStr, calendar), days - 1, calendar);
+    }
 
-        while (count < days - 1) {
-            date.setDate(date.getDate() + 1);
-            const dateStr = date.toISOString().split('T')[0];
-            if (this.isWorkingDay(dateStr, calendar)) {
-                count++;
-            }
+    /** ISO (YYYY-MM-DD) to DD/MM/YYYY */
+    static formatDate(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '');
+    }
+
+    /** DD/MM/YYYY (or ISO) to ISO; returns null when invalid */
+    static parseDate(str) {
+        const s = (str || '').trim();
+        let y, mo, d;
+        let m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(s);
+        if (m) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+        else if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+        else return null;
+        const dt = new Date(Date.UTC(y, mo - 1, d));
+        if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+        return dt.toISOString().split('T')[0];
+    }
+
+    static addCalendarDays(dateStr, n) {
+        const d = new Date(dateStr + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().split('T')[0];
+    }
+
+    /**
+     * First working day on or after dateStr
+     */
+    static nextWorkingDay(dateStr, calendar = new ProjectCalendar()) {
+        if (!dateStr) return dateStr;
+        let cur = dateStr;
+        for (let i = 0; i < 3660; i++) {
+            if (this.isWorkingDay(cur, calendar)) return cur;
+            cur = this.addCalendarDays(cur, 1);
         }
-        return date.toISOString().split('T')[0];
+        return dateStr;
+    }
+
+    /**
+     * Move n working days forward (n > 0) or backward (n < 0) from the nearest working day on/after dateStr
+     */
+    static shiftWorkingDays(dateStr, n, calendar = new ProjectCalendar()) {
+        if (!dateStr) return dateStr;
+        let cur = this.nextWorkingDay(dateStr, calendar);
+        const step = n < 0 ? -1 : 1;
+        let remaining = Math.abs(n);
+        let guard = 0;
+        while (remaining > 0 && guard++ < 36600) {
+            cur = this.addCalendarDays(cur, step);
+            if (this.isWorkingDay(cur, calendar)) remaining--;
+        }
+        return cur;
     }
 
     /**
@@ -504,19 +548,16 @@ class CalendarEngine {
      */
     static getWorkingDays(startDateStr, endDateStr, calendar = new ProjectCalendar()) {
         if (!startDateStr || !endDateStr) return 1;
-        let start = new Date(startDateStr);
-        let end = new Date(endDateStr);
-        if (start > end) return 1;
+        if (startDateStr > endDateStr) return 1;
 
         let count = 0;
-        let current = new Date(start);
+        let current = startDateStr;
 
-        while (current <= end) {
-            const dateStr = current.toISOString().split('T')[0];
-            if (this.isWorkingDay(dateStr, calendar)) {
+        while (current <= endDateStr) {
+            if (this.isWorkingDay(current, calendar)) {
                 count++;
             }
-            current.setDate(current.getDate() + 1);
+            current = this.addCalendarDays(current, 1);
         }
 
         return Math.max(1, count);
@@ -673,7 +714,7 @@ class DependencyEngine {
         const leafTasks = tasks.filter(t => !t.isSummary);
         let changed = true;
         let iterations = 0;
-        const maxIterations = tasks.length * 2;
+        const maxIterations = tasks.length + 2;
 
         while (changed && iterations < maxIterations) {
             changed = false;
@@ -681,48 +722,41 @@ class DependencyEngine {
 
             leafTasks.forEach(task => {
                 const preds = this.parsePredecessors(task.predecessors, tasks);
-                let earliestStart = new Date(task.start);
+                const spanBack = Math.max(1, task.duration || 0) - 1;
+                const validPreds = preds.filter(p => p.targetTask && p.targetTask !== task && p.targetTask.start && p.targetTask.finish);
 
-                preds.forEach(pred => {
+                // Tasks with predecessors are fully driven by them; others keep their manual start
+                let earliestStart = null;
+
+                validPreds.forEach(pred => {
                     const predTask = pred.targetTask;
-                    if (!predTask) return;
-
                     let requiredDate;
-                    const predStart = new Date(predTask.start);
-                    const predFinish = new Date(predTask.finish);
 
                     switch (pred.type) {
-                        case 'FS':
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() + 1);
-                            break;
                         case 'SS':
-                            requiredDate = new Date(predStart);
+                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar);
                             break;
                         case 'FF':
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            requiredDate = CalendarEngine.shiftWorkingDays(
+                                CalendarEngine.shiftWorkingDays(predTask.finish, pred.lag, calendar), -spanBack, calendar);
                             break;
                         case 'SF':
-                            requiredDate = new Date(predStart);
-                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            requiredDate = CalendarEngine.shiftWorkingDays(
+                                CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar), -spanBack, calendar);
                             break;
-                        default:
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() + 1);
+                        default: // FS: next working day after predecessor finish, plus lag in working days
+                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.finish, 1 + pred.lag, calendar);
                     }
 
-                    if (pred.lag !== 0) {
-                        requiredDate.setDate(requiredDate.getDate() + pred.lag);
-                    }
-
-                    if (requiredDate > earliestStart) {
+                    if (!earliestStart || requiredDate > earliestStart) {
                         earliestStart = requiredDate;
                     }
                 });
 
-                const calculatedStart = earliestStart.toISOString().split('T')[0];
-                const calculatedFinish = this.addWorkingDays(calculatedStart, task.duration, calendar);
+                const calculatedStart = CalendarEngine.nextWorkingDay(earliestStart || task.start, calendar);
+                const calculatedFinish = task.duration > 0
+                    ? this.addWorkingDays(calculatedStart, task.duration, calendar)
+                    : calculatedStart;
 
                 if (task.start !== calculatedStart || task.finish !== calculatedFinish) {
                     task.start = calculatedStart;
@@ -730,9 +764,11 @@ class DependencyEngine {
                     changed = true;
                 }
             });
+
+            // Summary dates must be current when summaries act as predecessors
+            this.updateWBSHierarchy(tasks, calendar);
         }
 
-        this.updateWBSHierarchy(tasks, calendar);
         this.calculateCriticalPath(tasks);
     }
 
@@ -916,6 +952,7 @@ class BaselineEngine {
 
 
 
+
 class WbsGridView {
     constructor(containerElement, onTaskChange, onTaskSelect) {
         this.container = containerElement;
@@ -1042,7 +1079,7 @@ class WbsGridView {
                 <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
                     <!-- WBS -->
                     <td class="py-1.5 px-2 text-center text-slate-500 text-[11px] font-mono border-r border-slate-200">
-                        ${t.wbs}
+                        <span class="wbs-drag-handle cursor-grab text-slate-400 hover:text-slate-700 mr-0.5" draggable="true" data-id="${t.id}" title="Drag to move task">&#8942;&#8942;</span>${t.wbs}
                     </td>
 
                     <!-- Activity Name -->
@@ -1131,14 +1168,14 @@ class WbsGridView {
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="date" data-field="start" data-id="${t.id}" value="${t.start}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
+                            <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
                         </td>
                     ` : ''}
 
                     <!-- Finish Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="date" data-field="finish" data-id="${t.id}" value="${t.finish}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center">
+                            <input type="text" data-field="finish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.finish)}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center">
                         </td>
                     ` : ''}
 
@@ -1171,6 +1208,47 @@ class WbsGridView {
                 if (['INPUT', 'SELECT', 'BUTTON', 'SVG', 'PATH'].includes(e.target.tagName)) return;
                 const id = row.getAttribute('data-id');
                 this.selectTask(id);
+            });
+        });
+
+        // Drag & drop row reordering
+        let dragId = null;
+        const clearDropMarks = () => this.container.querySelectorAll('.wbs-row').forEach(r => {
+            r.style.boxShadow = '';
+        });
+        const dropPosition = (row, e) => {
+            const rect = row.getBoundingClientRect();
+            return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+        };
+
+        this.container.querySelectorAll('.wbs-drag-handle').forEach(handle => {
+            handle.addEventListener('dragstart', (e) => {
+                dragId = handle.getAttribute('data-id');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragId);
+            });
+            handle.addEventListener('dragend', () => { dragId = null; clearDropMarks(); });
+        });
+
+        this.container.querySelectorAll('.wbs-row').forEach(row => {
+            row.addEventListener('dragover', (e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                clearDropMarks();
+                row.style.boxShadow = dropPosition(row, e) === 'before'
+                    ? 'inset 0 2px 0 #4f46e5' : 'inset 0 -2px 0 #4f46e5';
+            });
+            row.addEventListener('drop', (e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                const targetId = row.getAttribute('data-id');
+                const position = dropPosition(row, e);
+                const movedId = dragId;
+                dragId = null;
+                clearDropMarks();
+                if (this.onTaskChange && movedId !== targetId) {
+                    this.onTaskChange(movedId, 'move', { targetId, position });
+                }
             });
         });
 
@@ -1224,6 +1302,14 @@ class WbsGridView {
                     if (customStatus && customStatus.trim()) {
                         value = registerCustomStatus(customStatus.trim());
                     } else {
+                        this.render(this.tasks, this.resources);
+                        return;
+                    }
+                }
+
+                if (field === 'start') {
+                    value = CalendarEngine.parseDate(value);
+                    if (!value) {
                         this.render(this.tasks, this.resources);
                         return;
                     }
@@ -1677,7 +1763,7 @@ class GanttView {
             const ghostY = y + 18;
 
             baselineGhostHtml = `
-                <div style="left: ${bx}px; top: ${ghostY}px; width: ${bWidth}px; height: 6px;" class="absolute rounded bg-slate-300/70 border border-slate-400 border-dashed pointer-events-none z-10" title="Baseline: ${task.baseline.start} to ${task.baseline.finish}"></div>
+                <div style="left: ${bx}px; top: ${ghostY}px; width: ${bWidth}px; height: 6px;" class="absolute rounded bg-slate-300/70 border border-slate-400 border-dashed pointer-events-none z-10" title="Baseline: ${CalendarEngine.formatDate(task.baseline.start)} to ${CalendarEngine.formatDate(task.baseline.finish)}"></div>
             `;
         }
 
@@ -1701,7 +1787,7 @@ class GanttView {
             const mx = x + this.dayWidth / 2 - 8;
             return `
                 ${baselineGhostHtml}
-                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${task.start})">
+                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${CalendarEngine.formatDate(task.start)})">
                     <div class="w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm group-hover:scale-115 transition-transform"></div>
                     <span class="absolute left-5 top-0 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
                         ◆ ${this.escapeHtml(task.name)}
@@ -1910,6 +1996,7 @@ class GanttView {
 
 
 
+
 class MilestonesView {
     constructor(containerElement) {
         this.container = containerElement;
@@ -1988,12 +2075,12 @@ class MilestonesView {
                 <div class="text-[11px] text-slate-600 space-y-0.5 font-mono">
                     <div class="flex justify-between">
                         <span class="text-slate-400">Target:</span>
-                        <span class="font-bold text-slate-800">${m.finish || m.start}</span>
+                        <span class="font-bold text-slate-800">${CalendarEngine.formatDate(m.finish || m.start)}</span>
                     </div>
                     ${m.baseline && m.baseline.finish ? `
                         <div class="flex justify-between text-[10px]">
                             <span class="text-slate-400">Baseline:</span>
-                            <span class="text-slate-500 line-through">${m.baseline.finish}</span>
+                            <span class="text-slate-500 line-through">${CalendarEngine.formatDate(m.baseline.finish)}</span>
                         </div>
                     ` : ''}
                 </div>
@@ -2236,6 +2323,8 @@ class ResourceView {
  * Calendar Modal View: Configures Weekly Off Days, Festive Holidays & Overtime Working Days
  */
 
+
+
 class CalendarModalView {
     constructor(modalContainer, onCalendarChange) {
         this.container = modalContainer;
@@ -2296,7 +2385,7 @@ class CalendarModalView {
 
                             <!-- Add Holiday Form -->
                             <div class="flex items-center gap-2 pt-1">
-                                <input type="date" id="new-holiday-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <input type="text" placeholder="DD/MM/YYYY" id="new-holiday-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <input type="text" id="new-holiday-name" placeholder="Holiday Name (e.g. Diwali)" class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <button id="btn-add-holiday" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium shadow-sm transition">
                                     + Add Holiday
@@ -2318,7 +2407,7 @@ class CalendarModalView {
                                             <tr><td colspan="3" class="p-3 text-center text-slate-400 italic">No holidays configured</td></tr>
                                         ` : (this.calendar.holidays || []).map((h, i) => `
                                             <tr class="hover:bg-slate-50">
-                                                <td class="p-2 font-mono font-bold text-slate-800 border-r border-slate-100">${h.date}</td>
+                                                <td class="p-2 font-mono font-bold text-slate-800 border-r border-slate-100">${CalendarEngine.formatDate(h.date)}</td>
                                                 <td class="p-2 border-r border-slate-100">${this.escapeHtml(h.name)}</td>
                                                 <td class="p-2 text-center">
                                                     <button data-action="delete-holiday" data-index="${i}" class="text-red-600 hover:text-red-800 font-bold">✕</button>
@@ -2339,7 +2428,7 @@ class CalendarModalView {
 
                             <!-- Add Overtime Form -->
                             <div class="flex items-center gap-2 pt-1">
-                                <input type="date" id="new-overtime-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <input type="text" placeholder="DD/MM/YYYY" id="new-overtime-date" class="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <input type="text" id="new-overtime-note" placeholder="Note (e.g. EVT Spin Crunch Saturday)" class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
                                 <button id="btn-add-overtime" class="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium shadow-sm transition">
                                     + Add Overtime
@@ -2361,7 +2450,7 @@ class CalendarModalView {
                                             <tr><td colspan="3" class="p-3 text-center text-slate-400 italic">No overtime days configured</td></tr>
                                         ` : (this.calendar.overtimeDays || []).map((o, i) => `
                                             <tr class="hover:bg-amber-50/50">
-                                                <td class="p-2 font-mono font-bold text-amber-900 border-r border-slate-100">${o.date}</td>
+                                                <td class="p-2 font-mono font-bold text-amber-900 border-r border-slate-100">${CalendarEngine.formatDate(o.date)}</td>
                                                 <td class="p-2 border-r border-slate-100">${this.escapeHtml(o.note)}</td>
                                                 <td class="p-2 text-center">
                                                     <button data-action="delete-overtime" data-index="${i}" class="text-red-600 hover:text-red-800 font-bold">✕</button>
@@ -2435,9 +2524,11 @@ class CalendarModalView {
             addHolidayBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-holiday-date');
                 const nameInput = this.container.querySelector('#new-holiday-name');
-                if (dateInput && nameInput && dateInput.value && nameInput.value.trim()) {
+                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
+                if (iso && nameInput && nameInput.value.trim()) {
                     this.calendar.holidays.push({
-                        date: dateInput.value,
+                        date: iso,
                         name: nameInput.value.trim()
                     });
                     this.render(this.calendar);
@@ -2460,9 +2551,11 @@ class CalendarModalView {
             addOvertimeBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-overtime-date');
                 const noteInput = this.container.querySelector('#new-overtime-note');
-                if (dateInput && noteInput && dateInput.value && noteInput.value.trim()) {
+                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
+                if (iso && noteInput && noteInput.value.trim()) {
                     this.calendar.overtimeDays.push({
-                        date: dateInput.value,
+                        date: iso,
                         note: noteInput.value.trim()
                     });
                     this.render(this.calendar);
@@ -2492,6 +2585,7 @@ class CalendarModalView {
  * Dependency Tree & Network Diagram View (PERT Chart):
  * Visual DAG showing task dependency relationships, predecessor chains, and critical path analysis.
  */
+
 
 
 
@@ -2605,8 +2699,8 @@ class DependencyTreeView {
                 <div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 font-mono">
                     <div><span class="text-slate-400">Dur:</span> <span class="font-bold text-slate-800">${task.duration}d</span></div>
                     <div><span class="text-slate-400">Lead:</span> <span class="font-bold text-amber-700">${task.leadTime || 0}d</span></div>
-                    <div><span class="text-slate-400">Start:</span> ${task.start || '-'}</div>
-                    <div><span class="text-slate-400">End:</span> ${task.finish || '-'}</div>
+                    <div><span class="text-slate-400">Start:</span> ${CalendarEngine.formatDate(task.start) || '-'}</div>
+                    <div><span class="text-slate-400">End:</span> ${CalendarEngine.formatDate(task.finish) || '-'}</div>
                 </div>
 
                 <!-- Engineer & Predecessors -->
@@ -3038,6 +3132,7 @@ class ProjectStore {
 
 
 
+
 class ExcelExporter {
 
     static exportToExcel(projectTitle, tasks, resources = [], calendar = {}) {
@@ -3058,8 +3153,8 @@ class ExcelExporter {
             'Assigned Engineers': t.getFormattedAssignments(),
             'Status': t.status,
             'Duration (Days)': t.duration,
-            'Start Date': t.start,
-            'Finish Date': t.finish,
+            'Start Date': CalendarEngine.formatDate(t.start),
+            'Finish Date': CalendarEngine.formatDate(t.finish),
             'Predecessors': t.predecessors || '',
             'Procurement Lead (Days)': t.leadTime || 0,
             'Vendor': t.vendor || '',
@@ -3080,8 +3175,8 @@ class ExcelExporter {
                 'Hardware Stage': m.stage,
                 'Workstream': m.workstream,
                 'Assigned Engineer': m.assignedTo || 'Unassigned',
-                'Target Date': m.finish || m.start,
-                'Baseline Date': (m.baseline && m.baseline.finish) || 'N/A',
+                'Target Date': CalendarEngine.formatDate(m.finish || m.start),
+                'Baseline Date': (m.baseline && m.baseline.finish) ? CalendarEngine.formatDate(m.baseline.finish) : 'N/A',
                 'Variance': v.statusText,
                 'Status': m.status
             };
@@ -3108,8 +3203,8 @@ class ExcelExporter {
 
         const calendarData = [
             { 'Config Type': 'Standard Weekly Working Days', 'Details': workingDayNames },
-            ... (calendar.holidays || []).map(h => ({ 'Config Type': 'Festive / Company Holiday', 'Details': `${h.date}: ${h.name}` })),
-            ... (calendar.overtimeDays || []).map(o => ({ 'Config Type': 'Overtime Working Day', 'Details': `${o.date}: ${o.note}` }))
+            ... (calendar.holidays || []).map(h => ({ 'Config Type': 'Festive / Company Holiday', 'Details': `${CalendarEngine.formatDate(h.date)}: ${h.name}` })),
+            ... (calendar.overtimeDays || []).map(o => ({ 'Config Type': 'Overtime Working Day', 'Details': `${CalendarEngine.formatDate(o.date)}: ${o.note}` }))
         ];
 
         const wsCal = window.XLSX.utils.json_to_sheet(calendarData);
@@ -3130,8 +3225,8 @@ class ExcelExporter {
             `"${t.assignedTo || ''}"`,
             `"${t.status}"`,
             t.duration,
-            `"${t.start}"`,
-            `"${t.finish}"`,
+            `"${CalendarEngine.formatDate(t.start)}"`,
+            `"${CalendarEngine.formatDate(t.finish)}"`,
             `"${(t.predecessors || '').replace(/"/g, '""')}"`,
             t.leadTime || 0,
             t.progress || 0
@@ -3409,6 +3504,8 @@ class ProjectManagementApp {
             this.indentTask(taskId);
         } else if (actionOrField === 'outdent' && taskId) {
             this.outdentTask(taskId);
+        } else if (actionOrField === 'move' && taskId) {
+            this.moveTask(taskId, value.targetId, value.position);
         } else if (actionOrField === 'delete' && taskId) {
             if (confirm('Delete selected activity and any subtasks?')) {
                 this.deleteTaskRecursive(taskId);
@@ -3417,9 +3514,7 @@ class ProjectManagementApp {
             const task = this.tasks.find(t => t.id === taskId);
             if (task) {
                 task[actionOrField] = value;
-                if (actionOrField === 'duration' || actionOrField === 'start') {
-                    task.finish = task.calculateFinishDate(task.start, task.duration);
-                }
+                // Finish is recalculated by the scheduler using the project calendar
             }
         }
 
@@ -3445,6 +3540,43 @@ class ProjectManagementApp {
 
     handleTaskSelect(taskId) {
         this.selectedTaskId = taskId;
+    }
+
+    /**
+     * Move a task (with its subtasks) before/after a target task; predecessor references follow the new WBS numbers
+     */
+    moveTask(dragId, targetId, position) {
+        if (dragId === targetId) return;
+        const dragged = this.tasks.find(t => t.id === dragId);
+        const target = this.tasks.find(t => t.id === targetId);
+        if (!dragged || !target || this.isDescendantOf(target, dragId)) return;
+
+        const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
+
+        const block = this.tasks.filter(t => t.id === dragId || this.isDescendantOf(t, dragId));
+        const blockIds = new Set(block.map(t => t.id));
+        const rest = this.tasks.filter(t => !blockIds.has(t.id));
+
+        let insertAt = rest.findIndex(t => t.id === targetId);
+        if (position === 'after') {
+            insertAt++;
+            while (insertAt < rest.length && this.isDescendantOf(rest[insertAt], targetId)) insertAt++;
+        }
+
+        dragged.parentId = target.parentId || null;
+        rest.splice(insertAt, 0, ...block);
+        this.tasks = rest;
+
+        DependencyEngine.updateWBSHierarchy(this.tasks, this.calendar);
+        this.tasks.forEach(t => {
+            const preds = parsed.get(t.id) || [];
+            if (preds.length === 0) return;
+            t.predecessors = preds.map(p => {
+                const lag = p.lag > 0 ? `+${p.lag}d` : (p.lag < 0 ? `${p.lag}d` : '');
+                return `${p.targetTask.wbs}${p.type}${lag}`;
+            }).join(', ');
+        });
+        this.selectedTaskId = dragId;
     }
 
     indentTask(taskId) {
@@ -3571,6 +3703,7 @@ class ProjectManagementApp {
                             this.tasks = imported.tasks;
                             this.resources = imported.resources;
                             this.calendar = imported.calendar;
+                            DependencyEngine.scheduleProject(this.tasks, this.calendar);
                             this.renderAllViews();
                         }
                     };
@@ -3593,6 +3726,7 @@ class ProjectManagementApp {
                         this.tasks = preset.tasks;
                         this.resources = preset.resources;
                         this.calendar = preset.calendar;
+                        DependencyEngine.scheduleProject(this.tasks, this.calendar);
                         this.renderAllViews();
                     }
                 };

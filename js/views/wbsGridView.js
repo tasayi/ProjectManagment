@@ -4,6 +4,7 @@
 
 import { WORKSTREAMS, HARDWARE_STAGES, STATUS_PILLS, registerCustomWorkstream, registerCustomStage, registerCustomStatus } from '../models/taskModel.js';
 import { BaselineEngine } from '../engine/baselineEngine.js';
+import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class WbsGridView {
     constructor(containerElement, onTaskChange, onTaskSelect) {
@@ -131,7 +132,7 @@ export class WbsGridView {
                 <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
                     <!-- WBS -->
                     <td class="py-1.5 px-2 text-center text-slate-500 text-[11px] font-mono border-r border-slate-200">
-                        ${t.wbs}
+                        <span class="wbs-drag-handle cursor-grab text-slate-400 hover:text-slate-700 mr-0.5" draggable="true" data-id="${t.id}" title="Drag to move task">&#8942;&#8942;</span>${t.wbs}
                     </td>
 
                     <!-- Activity Name -->
@@ -220,14 +221,14 @@ export class WbsGridView {
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="date" data-field="start" data-id="${t.id}" value="${t.start}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
+                            <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
                         </td>
                     ` : ''}
 
                     <!-- Finish Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="date" data-field="finish" data-id="${t.id}" value="${t.finish}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center">
+                            <input type="text" data-field="finish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.finish)}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center">
                         </td>
                     ` : ''}
 
@@ -260,6 +261,47 @@ export class WbsGridView {
                 if (['INPUT', 'SELECT', 'BUTTON', 'SVG', 'PATH'].includes(e.target.tagName)) return;
                 const id = row.getAttribute('data-id');
                 this.selectTask(id);
+            });
+        });
+
+        // Drag & drop row reordering
+        let dragId = null;
+        const clearDropMarks = () => this.container.querySelectorAll('.wbs-row').forEach(r => {
+            r.style.boxShadow = '';
+        });
+        const dropPosition = (row, e) => {
+            const rect = row.getBoundingClientRect();
+            return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+        };
+
+        this.container.querySelectorAll('.wbs-drag-handle').forEach(handle => {
+            handle.addEventListener('dragstart', (e) => {
+                dragId = handle.getAttribute('data-id');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragId);
+            });
+            handle.addEventListener('dragend', () => { dragId = null; clearDropMarks(); });
+        });
+
+        this.container.querySelectorAll('.wbs-row').forEach(row => {
+            row.addEventListener('dragover', (e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                clearDropMarks();
+                row.style.boxShadow = dropPosition(row, e) === 'before'
+                    ? 'inset 0 2px 0 #4f46e5' : 'inset 0 -2px 0 #4f46e5';
+            });
+            row.addEventListener('drop', (e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                const targetId = row.getAttribute('data-id');
+                const position = dropPosition(row, e);
+                const movedId = dragId;
+                dragId = null;
+                clearDropMarks();
+                if (this.onTaskChange && movedId !== targetId) {
+                    this.onTaskChange(movedId, 'move', { targetId, position });
+                }
             });
         });
 
@@ -313,6 +355,14 @@ export class WbsGridView {
                     if (customStatus && customStatus.trim()) {
                         value = registerCustomStatus(customStatus.trim());
                     } else {
+                        this.render(this.tasks, this.resources);
+                        return;
+                    }
+                }
+
+                if (field === 'start') {
+                    value = CalendarEngine.parseDate(value);
+                    if (!value) {
                         this.render(this.tasks, this.resources);
                         return;
                     }

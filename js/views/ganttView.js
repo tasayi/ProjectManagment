@@ -278,7 +278,7 @@ export class GanttView {
             const ghostY = y + 18;
 
             baselineGhostHtml = `
-                <div style="left: ${bx}px; top: ${ghostY}px; width: ${bWidth}px; height: 6px;" class="absolute rounded bg-slate-300/70 border border-slate-400 border-dashed pointer-events-none z-10" title="Baseline: ${task.baseline.start} to ${task.baseline.finish}"></div>
+                <div style="left: ${bx}px; top: ${ghostY}px; width: ${bWidth}px; height: 6px;" class="absolute rounded bg-slate-300/70 border border-slate-400 border-dashed pointer-events-none z-10" title="Baseline: ${CalendarEngine.formatDate(task.baseline.start)} to ${CalendarEngine.formatDate(task.baseline.finish)}"></div>
             `;
         }
 
@@ -302,7 +302,7 @@ export class GanttView {
             const mx = x + this.dayWidth / 2 - 8;
             return `
                 ${baselineGhostHtml}
-                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${task.start})">
+                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${CalendarEngine.formatDate(task.start)})">
                     <div class="w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm group-hover:scale-115 transition-transform"></div>
                     <span class="absolute left-5 top-0 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
                         ◆ ${this.escapeHtml(task.name)}

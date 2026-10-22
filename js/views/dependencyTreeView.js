@@ -5,6 +5,7 @@
 
 import { HARDWARE_STAGES, WORKSTREAMS, STATUS_PILLS } from '../models/taskModel.js';
 import { DependencyEngine } from '../engine/dependencyEngine.js';
+import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class DependencyTreeView {
     constructor(containerElement) {
@@ -115,8 +116,8 @@ export class DependencyTreeView {
                 <div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 font-mono">
                     <div><span class="text-slate-400">Dur:</span> <span class="font-bold text-slate-800">${task.duration}d</span></div>
                     <div><span class="text-slate-400">Lead:</span> <span class="font-bold text-amber-700">${task.leadTime || 0}d</span></div>
-                    <div><span class="text-slate-400">Start:</span> ${task.start || '-'}</div>
-                    <div><span class="text-slate-400">End:</span> ${task.finish || '-'}</div>
+                    <div><span class="text-slate-400">Start:</span> ${CalendarEngine.formatDate(task.start) || '-'}</div>
+                    <div><span class="text-slate-400">End:</span> ${CalendarEngine.formatDate(task.finish) || '-'}</div>
                 </div>
 
                 <!-- Engineer & Predecessors -->

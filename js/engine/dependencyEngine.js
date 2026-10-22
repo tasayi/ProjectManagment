@@ -145,7 +145,7 @@ export class DependencyEngine {
         const leafTasks = tasks.filter(t => !t.isSummary);
         let changed = true;
         let iterations = 0;
-        const maxIterations = tasks.length * 2;
+        const maxIterations = tasks.length + 2;
 
         while (changed && iterations < maxIterations) {
             changed = false;
@@ -153,48 +153,41 @@ export class DependencyEngine {
 
             leafTasks.forEach(task => {
                 const preds = this.parsePredecessors(task.predecessors, tasks);
-                let earliestStart = new Date(task.start);
+                const spanBack = Math.max(1, task.duration || 0) - 1;
+                const validPreds = preds.filter(p => p.targetTask && p.targetTask !== task && p.targetTask.start && p.targetTask.finish);
 
-                preds.forEach(pred => {
+                // Tasks with predecessors are fully driven by them; others keep their manual start
+                let earliestStart = null;
+
+                validPreds.forEach(pred => {
                     const predTask = pred.targetTask;
-                    if (!predTask) return;
-
                     let requiredDate;
-                    const predStart = new Date(predTask.start);
-                    const predFinish = new Date(predTask.finish);
 
                     switch (pred.type) {
-                        case 'FS':
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() + 1);
-                            break;
                         case 'SS':
-                            requiredDate = new Date(predStart);
+                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar);
                             break;
                         case 'FF':
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            requiredDate = CalendarEngine.shiftWorkingDays(
+                                CalendarEngine.shiftWorkingDays(predTask.finish, pred.lag, calendar), -spanBack, calendar);
                             break;
                         case 'SF':
-                            requiredDate = new Date(predStart);
-                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            requiredDate = CalendarEngine.shiftWorkingDays(
+                                CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar), -spanBack, calendar);
                             break;
-                        default:
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() + 1);
+                        default: // FS: next working day after predecessor finish, plus lag in working days
+                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.finish, 1 + pred.lag, calendar);
                     }
 
-                    if (pred.lag !== 0) {
-                        requiredDate.setDate(requiredDate.getDate() + pred.lag);
-                    }
-
-                    if (requiredDate > earliestStart) {
+                    if (!earliestStart || requiredDate > earliestStart) {
                         earliestStart = requiredDate;
                     }
                 });
 
-                const calculatedStart = earliestStart.toISOString().split('T')[0];
-                const calculatedFinish = this.addWorkingDays(calculatedStart, task.duration, calendar);
+                const calculatedStart = CalendarEngine.nextWorkingDay(earliestStart || task.start, calendar);
+                const calculatedFinish = task.duration > 0
+                    ? this.addWorkingDays(calculatedStart, task.duration, calendar)
+                    : calculatedStart;
 
                 if (task.start !== calculatedStart || task.finish !== calculatedFinish) {
                     task.start = calculatedStart;
@@ -202,9 +195,11 @@ export class DependencyEngine {
                     changed = true;
                 }
             });
+
+            // Summary dates must be current when summaries act as predecessors
+            this.updateWBSHierarchy(tasks, calendar);
         }
 
-        this.updateWBSHierarchy(tasks, calendar);
         this.calculateCriticalPath(tasks);
     }
 
