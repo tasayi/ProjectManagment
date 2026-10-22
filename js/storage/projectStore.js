@@ -2,7 +2,7 @@
  * Project Store: LocalStorage Persistence, Custom .prj File Import/Export, Blank Project & Presets
  */
 
-import { Task } from '../models/taskModel.js';
+import { Task, exportWorkstreams, importWorkstreams } from '../models/taskModel.js';
 import { Resource, DEFAULT_RESOURCES } from '../models/resourceModel.js';
 import { ProjectCalendar } from '../models/calendarModel.js';
 import { DependencyEngine } from '../engine/dependencyEngine.js';
@@ -11,19 +11,42 @@ import { BaselineEngine } from '../engine/baselineEngine.js';
 const STORAGE_KEY = 'hardware_pm_project_data';
 
 export class ProjectStore {
-    
+    // Retain active file handle from File System Access API
+    static currentFileHandle = null;
+    static currentFileName = null;
+
     /**
-     * Auto-save current tasks, resources, and calendar to LocalStorage
+     * Build standardized payload object
+     */
+    static buildPayload(projectTitle, tasks, resources, calendar) {
+        return {
+            appName: 'Project Management Tool',
+            fileFormat: 'hardware_pm_prj',
+            version: '1.2',
+            exportedAt: new Date().toISOString(),
+            project: {
+                title: projectTitle || 'Project Management Schedule',
+                tasks: tasks,
+                resources: resources,
+                calendar: calendar,
+                workstreams: exportWorkstreams()
+            }
+        };
+    }
+
+    /**
+     * Auto-save current tasks, resources, calendar, and workstreams to LocalStorage
      */
     static saveToLocalStorage(projectTitle, tasks, resources, calendar) {
         try {
             const payload = {
-                version: '1.1',
-                title: projectTitle || 'Hardware Project',
+                version: '1.2',
+                title: projectTitle || 'Project Management Schedule',
                 updatedAt: new Date().toISOString(),
                 tasks: tasks,
                 resources: resources,
-                calendar: calendar
+                calendar: calendar,
+                workstreams: exportWorkstreams()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch (e) {
@@ -32,15 +55,18 @@ export class ProjectStore {
     }
 
     /**
-     * Load tasks, resources, and calendar from LocalStorage
+     * Load tasks, resources, calendar, and workstreams from LocalStorage
      */
     static loadFromLocalStorage() {
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return null;
             const data = JSON.parse(raw);
+            if (data.workstreams) {
+                importWorkstreams(data.workstreams);
+            }
             return {
-                title: data.title || 'Hardware Project',
+                title: data.title || 'Project Management Schedule',
                 tasks: (data.tasks || []).map(t => new Task(t)),
                 resources: (data.resources || []).map(r => new Resource(r)),
                 calendar: new ProjectCalendar(data.calendar || {})
@@ -52,34 +78,108 @@ export class ProjectStore {
     }
 
     /**
-     * Export project file as .prj (JSON format)
+     * In-place Save (Ctrl+S / Save button): writes back to currentFileHandle if available, otherwise Save As
      */
-    static exportProjectFile(projectTitle, tasks, resources, calendar) {
-        const payload = {
-            appName: 'Antigravity Hardware PM',
-            fileFormat: 'hardware_pm_prj',
-            version: '1.1',
-            exportedAt: new Date().toISOString(),
-            project: {
-                title: projectTitle || 'Hardware R&D Project',
-                tasks: tasks,
-                resources: resources,
-                calendar: calendar
-            }
-        };
+    static async saveProjectFileInPlace(projectTitle, tasks, resources, calendar) {
+        this.saveToLocalStorage(projectTitle, tasks, resources, calendar);
 
+        if (this.currentFileHandle && 'createWritable' in this.currentFileHandle) {
+            try {
+                const payload = this.buildPayload(projectTitle, tasks, resources, calendar);
+                const writable = await this.currentFileHandle.createWritable();
+                await writable.write(JSON.stringify(payload, null, 2));
+                await writable.close();
+                return { success: true, mode: 'inplace', fileName: this.currentFileHandle.name };
+            } catch (err) {
+                console.warn('In-place write failed, falling back to Save As:', err);
+            }
+        }
+
+        // If no file handle exists, invoke Save As
+        return await this.saveProjectFileAs(projectTitle, tasks, resources, calendar);
+    }
+
+    /**
+     * Save As button: prompt for new destination/filename via File System Access API or download fallback
+     */
+    static async saveProjectFileAs(projectTitle, tasks, resources, calendar) {
+        this.saveToLocalStorage(projectTitle, tasks, resources, calendar);
+        const payload = this.buildPayload(projectTitle, tasks, resources, calendar);
         const jsonStr = JSON.stringify(payload, null, 2);
+        const safeName = `${(projectTitle || 'Project').replace(/[^a-z0-9_-]/gi, '_')}.prj`;
+
+        // Modern File System Access API
+        if (typeof window.showSaveFilePicker === 'function') {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: safeName,
+                    types: [{
+                        description: 'Project Management File (*.prj)',
+                        accept: { 'application/json': ['.prj', '.json'] }
+                    }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(jsonStr);
+                await writable.close();
+                this.currentFileHandle = handle;
+                this.currentFileName = handle.name;
+                return { success: true, mode: 'saveas', fileName: handle.name };
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    return { success: false, aborted: true };
+                }
+                console.warn('showSaveFilePicker failed, falling back to download:', err);
+            }
+        }
+
+        // Fallback: standard file download
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        
-        const safeName = (projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_');
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${safeName}.prj`;
+        link.download = safeName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        this.currentFileName = safeName;
+        return { success: true, mode: 'download', fileName: safeName };
+    }
+
+    /**
+     * Legacy Export helper
+     */
+    static exportProjectFile(projectTitle, tasks, resources, calendar) {
+        this.saveProjectFileAs(projectTitle, tasks, resources, calendar);
+    }
+
+    /**
+     * Open File via modern File System Access API with handle retention
+     */
+    static async openProjectFileWithPicker() {
+        if (typeof window.showOpenFilePicker === 'function') {
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    multiple: false,
+                    types: [{
+                        description: 'Project Management File (*.prj, *.json)',
+                        accept: { 'application/json': ['.prj', '.json'] }
+                    }]
+                });
+                const file = await handle.getFile();
+                const content = await file.text();
+                const imported = this.importProjectFile(content);
+                if (imported) {
+                    this.currentFileHandle = handle;
+                    this.currentFileName = handle.name;
+                    return { success: true, imported, fileName: handle.name };
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return { success: false, aborted: true };
+                console.warn('showOpenFilePicker error:', err);
+            }
+        }
+        return null;
     }
 
     /**
@@ -91,15 +191,22 @@ export class ProjectStore {
             let rawTasks = [];
             let rawResources = [];
             let rawCalendar = {};
+            let rawStreams = null;
 
             if (data.project) {
                 rawTasks = data.project.tasks || [];
                 rawResources = data.project.resources || [];
                 rawCalendar = data.project.calendar || {};
+                rawStreams = data.project.workstreams;
             } else {
                 rawTasks = data.tasks || [];
                 rawResources = data.resources || [];
                 rawCalendar = data.calendar || {};
+                rawStreams = data.workstreams;
+            }
+
+            if (rawStreams) {
+                importWorkstreams(rawStreams);
             }
 
             const tasks = rawTasks.map(t => new Task(t));

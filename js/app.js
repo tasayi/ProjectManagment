@@ -14,6 +14,7 @@ import { ResourceView } from './views/resourceView.js';
 import { CalendarModalView } from './views/calendarModalView.js';
 import { DependencyTreeView } from './views/dependencyTreeView.js';
 import { InfoGuideView } from './views/infoGuideView.js';
+import { StreamModalView } from './views/streamModalView.js';
 import { ProjectStore } from './storage/projectStore.js';
 import { ExcelExporter } from './export/excelExporter.js';
 import { PrintEngine } from './export/printEngine.js';
@@ -34,8 +35,10 @@ class ProjectManagementApp {
         this.milestonesView = null;
         this.resourceView = null;
         this.calendarModalView = null;
+        this.streamModalView = null;
         this.deptreeView = null;
         this.infoGuideView = null;
+        this._toastTimer = null;
     }
 
     init() {
@@ -66,6 +69,7 @@ class ProjectManagementApp {
         const deptreeContainer = document.getElementById('deptree-view-container');
         const infoGuideContainer = document.getElementById('info-guide-view-container');
         const calendarModalContainer = document.getElementById('calendar-modal-container');
+        const streamModalContainer = document.getElementById('stream-modal-container');
 
         this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
         this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
@@ -81,6 +85,11 @@ class ProjectManagementApp {
         this.calendarModalView = new CalendarModalView(calendarModalContainer, (updatedCal) => {
             this.calendar = updatedCal;
             DependencyEngine.scheduleProject(this.tasks, this.calendar);
+            this.renderAllViews();
+        });
+
+        this.streamModalView = new StreamModalView(streamModalContainer, () => {
+            ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks, this.resources, this.calendar);
             this.renderAllViews();
         });
 
@@ -270,6 +279,25 @@ class ProjectManagementApp {
     }
 
     /**
+     * Re-index predecessor strings following hierarchy, sorting, or deletion changes.
+     * Takes a Map of [taskId, Array<ParsedPredecessor>] captured BEFORE mutation.
+     */
+    reindexPredecessors(parsedMap) {
+        DependencyEngine.updateWBSHierarchy(this.tasks, this.calendar);
+        const validTaskIds = new Set(this.tasks.map(t => t.id));
+
+        this.tasks.forEach(t => {
+            const preds = parsedMap.get(t.id) || [];
+            if (preds.length === 0) return;
+            const validPreds = preds.filter(p => p.targetTask && validTaskIds.has(p.targetTask.id));
+            t.predecessors = validPreds.map(p => {
+                const lag = p.lag > 0 ? `+${p.lag}d` : (p.lag < 0 ? `${p.lag}d` : '');
+                return `${p.targetTask.wbs}${p.type}${lag}`;
+            }).join(', ');
+        });
+    }
+
+    /**
      * Move a task (with its subtasks) before/after a target task; predecessor references follow the new WBS numbers
      */
     moveTask(dragId, targetId, position) {
@@ -294,15 +322,7 @@ class ProjectManagementApp {
         rest.splice(insertAt, 0, ...block);
         this.tasks = rest;
 
-        DependencyEngine.updateWBSHierarchy(this.tasks, this.calendar);
-        this.tasks.forEach(t => {
-            const preds = parsed.get(t.id) || [];
-            if (preds.length === 0) return;
-            t.predecessors = preds.map(p => {
-                const lag = p.lag > 0 ? `+${p.lag}d` : (p.lag < 0 ? `${p.lag}d` : '');
-                return `${p.targetTask.wbs}${p.type}${lag}`;
-            }).join(', ');
-        });
+        this.reindexPredecessors(parsed);
         this.selectedTaskId = dragId;
     }
 
@@ -314,9 +334,11 @@ class ProjectManagementApp {
         const prevTask = this.tasks[index - 1];
 
         if (prevTask) {
+            const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
             task.parentId = prevTask.id;
             prevTask.isSummary = true;
             prevTask.expanded = true;
+            this.reindexPredecessors(parsed);
         }
     }
 
@@ -324,11 +346,14 @@ class ProjectManagementApp {
         const task = this.tasks.find(t => t.id === taskId);
         if (!task || !task.parentId) return;
 
+        const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
         const parent = this.tasks.find(t => t.id === task.parentId);
         task.parentId = parent ? parent.parentId : null;
+        this.reindexPredecessors(parsed);
     }
 
     deleteTaskRecursive(taskId) {
+        const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
         const toDelete = new Set([taskId]);
         let added = true;
         while (added) {
@@ -341,6 +366,7 @@ class ProjectManagementApp {
             });
         }
         this.tasks = this.tasks.filter(t => !toDelete.has(t.id));
+        this.reindexPredecessors(parsed);
     }
 
     bindHeaderControls() {
@@ -413,22 +439,65 @@ class ProjectManagementApp {
             };
         }
 
-        // Import / Export Controls
+        // Workstream Palette Modal Trigger
+        const btnStreams = document.getElementById('btn-streams');
+        if (btnStreams) {
+            btnStreams.onclick = () => {
+                if (this.streamModalView) this.streamModalView.open();
+            };
+        }
+
+        // Save Controls (Ctrl+S / In-place Save vs Save As)
+        const btnSavePrj = document.getElementById('btn-save-prj');
+        if (btnSavePrj) {
+            btnSavePrj.onclick = () => this.saveInPlace();
+        }
+
+        const btnSaveAsPrj = document.getElementById('btn-save-as-prj');
+        if (btnSaveAsPrj) {
+            btnSaveAsPrj.onclick = () => this.saveAs();
+        }
+
+        // Legacy export button alias if present
         const btnExportPrj = document.getElementById('btn-export-prj');
         if (btnExportPrj) {
-            btnExportPrj.onclick = () => ProjectStore.exportProjectFile(this.projectTitle, this.tasks, this.resources, this.calendar);
+            btnExportPrj.onclick = () => this.saveInPlace();
         }
 
-        const btnExportExcel = document.getElementById('btn-export-excel');
-        if (btnExportExcel) {
-            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks, this.resources, this.calendar);
-        }
+        // Global Shortcut: Ctrl+S or Cmd+S for in-place save
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                this.saveInPlace();
+            }
+        });
 
+        // Modern File Open (.prj)
         const btnImportPrj = document.getElementById('btn-import-prj');
         const fileInput = document.getElementById('prj-file-input');
 
-        if (btnImportPrj && fileInput) {
-            btnImportPrj.onclick = () => fileInput.click();
+        if (btnImportPrj) {
+            btnImportPrj.onclick = async () => {
+                if (typeof window.showOpenFilePicker === 'function') {
+                    const res = await ProjectStore.openProjectFileWithPicker();
+                    if (res && res.success && res.imported) {
+                        this.projectTitle = res.imported.title;
+                        this.tasks = res.imported.tasks;
+                        this.resources = res.imported.resources;
+                        this.calendar = res.imported.calendar;
+                        DependencyEngine.scheduleProject(this.tasks, this.calendar);
+                        this.renderAllViews();
+                        this.showSaveToast(`Loaded ${res.fileName}`);
+                        return;
+                    } else if (res && res.aborted) {
+                        return;
+                    }
+                }
+                if (fileInput) fileInput.click();
+            };
+        }
+
+        if (fileInput) {
             fileInput.onchange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -436,17 +505,26 @@ class ProjectManagementApp {
                     reader.onload = (evt) => {
                         const imported = ProjectStore.importProjectFile(evt.target.result);
                         if (imported) {
+                            ProjectStore.currentFileHandle = null;
+                            ProjectStore.currentFileName = file.name;
                             this.projectTitle = imported.title;
                             this.tasks = imported.tasks;
                             this.resources = imported.resources;
                             this.calendar = imported.calendar;
                             DependencyEngine.scheduleProject(this.tasks, this.calendar);
                             this.renderAllViews();
+                            this.showSaveToast(`Loaded ${file.name}`);
                         }
                     };
                     reader.readAsText(file);
                 }
+                fileInput.value = '';
             };
+        }
+
+        const btnExportExcel = document.getElementById('btn-export-excel');
+        if (btnExportExcel) {
+            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks, this.resources, this.calendar);
         }
 
         // Presets & New Project Dropdown
@@ -530,6 +608,53 @@ class ProjectManagementApp {
                 document.onmouseup = null;
             };
         };
+    }
+
+    async saveInPlace() {
+        const res = await ProjectStore.saveProjectFileInPlace(this.projectTitle, this.tasks, this.resources, this.calendar);
+        if (res && res.success) {
+            this.showSaveToast(`Saved successfully to ${res.fileName || 'file'}`);
+        } else if (res && !res.aborted) {
+            this.showSaveToast('Failed to save project file.', true);
+        }
+    }
+
+    async saveAs() {
+        const res = await ProjectStore.saveProjectFileAs(this.projectTitle, this.tasks, this.resources, this.calendar);
+        if (res && res.success) {
+            this.showSaveToast(`Saved copy to ${res.fileName || 'file'}`);
+        } else if (res && !res.aborted) {
+            this.showSaveToast('Failed to save project file.', true);
+        }
+    }
+
+    showSaveToast(message, isError = false) {
+        let toast = document.getElementById('app-save-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'app-save-toast';
+            document.body.appendChild(toast);
+        }
+
+        toast.className = isError
+            ? 'fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold flex items-center gap-2 transition-all duration-300 bg-red-600 text-white translate-y-0 opacity-100 pointer-events-none'
+            : 'fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold flex items-center gap-2 transition-all duration-300 bg-slate-900 text-emerald-400 border border-slate-700 translate-y-0 opacity-100 pointer-events-none';
+
+        toast.innerHTML = isError
+            ? `<svg class="w-4 h-4 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> <span>${this.escapeHtml(message)}</span>`
+            : `<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> <span>${this.escapeHtml(message)}</span>`;
+
+        if (this._toastTimer) clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => {
+            if (toast) {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-12', 'opacity-0');
+            }
+        }, 3000);
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 }
 

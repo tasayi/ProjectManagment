@@ -54,6 +54,12 @@
                 <span>Calendar</span>
             </button>
 
+            <!-- Workstream Colors & Palette Modal Trigger -->
+            <button id="btn-streams" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1.5 transition shadow-sm" title="Customize Workstream Colors and Names">
+                <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm10 10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4z"/></svg>
+                <span>🎨 Streams</span>
+            </button>
+
             <!-- Active Baseline Selector -->
             <select id="baseline-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none max-w-[150px]" title="Baseline used for variance comparison"></select>
 
@@ -63,16 +69,21 @@
                 Baseline
             </button>
 
-            <!-- Export .prj -->
-            <button id="btn-export-prj" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition">
+            <!-- Save Project In Place (Ctrl+S) -->
+            <button id="btn-save-prj" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition" title="Save in place (Ctrl+S)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-                Save (.prj)
+                <span>Save</span>
             </button>
 
-            <!-- Import .prj -->
-            <button id="btn-import-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition">
+            <!-- Save As New File -->
+            <button id="btn-save-as-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Save copy to a new file...">
+                <span>Save As...</span>
+            </button>
+
+            <!-- Import / Open .prj -->
+            <button id="btn-import-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Open project file (.prj)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                Open (.prj)
+                <span>Open</span>
             </button>
             <input type="file" id="prj-file-input" accept=".prj,.json" class="hidden">
 
@@ -129,6 +140,9 @@
 
         <!-- Calendar Config Modal Container -->
         <div id="calendar-modal-container"></div>
+
+        <!-- Workstream Color Palette Modal Container -->
+        <div id="stream-modal-container"></div>
 
     </main>
 

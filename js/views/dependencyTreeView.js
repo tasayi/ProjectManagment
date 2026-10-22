@@ -56,15 +56,25 @@ export class DependencyTreeView {
 
         // Group tasks by Stage for horizontal pipeline alignment
         const stageMap = new Map();
-        HARDWARE_STAGES.forEach(stg => stageMap.set(stg, []));
         leafTasks.forEach(t => {
             const stg = t.stage || 'EVT';
             if (!stageMap.has(stg)) stageMap.set(stg, []);
             stageMap.get(stg).push(t);
         });
 
-        // Generate Node Cards per stage
-        const columnsHtml = HARDWARE_STAGES.map(stage => {
+        // Determine relevant stages in developmental lifecycle order (only stages with active tasks)
+        const presentStages = new Set(stageMap.keys());
+        const orderedStages = [
+            ...HARDWARE_STAGES.filter(s => presentStages.has(s) && (stageMap.get(s) || []).length > 0),
+            ...Array.from(presentStages).filter(s => !HARDWARE_STAGES.includes(s) && (stageMap.get(s) || []).length > 0)
+        ];
+
+        if (orderedStages.length === 0) {
+            return `<div class="p-8 text-center text-slate-400 italic">No stage activities found.</div>`;
+        }
+
+        // Generate Node Cards only for relevant stages
+        const columnsHtml = orderedStages.map(stage => {
             const stageTasks = stageMap.get(stage) || [];
             return `
                 <div class="stage-flow-column flex-shrink-0 w-72 flex flex-col gap-4">

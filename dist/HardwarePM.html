@@ -138,6 +138,12 @@ body {
                 <span>Calendar</span>
             </button>
 
+            <!-- Workstream Colors & Palette Modal Trigger -->
+            <button id="btn-streams" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1.5 transition shadow-sm" title="Customize Workstream Colors and Names">
+                <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm10 10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4z"/></svg>
+                <span>🎨 Streams</span>
+            </button>
+
             <!-- Active Baseline Selector -->
             <select id="baseline-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none max-w-[150px]" title="Baseline used for variance comparison"></select>
 
@@ -147,16 +153,21 @@ body {
                 Baseline
             </button>
 
-            <!-- Export .prj -->
-            <button id="btn-export-prj" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition">
+            <!-- Save Project In Place (Ctrl+S) -->
+            <button id="btn-save-prj" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition" title="Save in place (Ctrl+S)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-                Save (.prj)
+                <span>Save</span>
             </button>
 
-            <!-- Import .prj -->
-            <button id="btn-import-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition">
+            <!-- Save As New File -->
+            <button id="btn-save-as-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Save copy to a new file...">
+                <span>Save As...</span>
+            </button>
+
+            <!-- Import / Open .prj -->
+            <button id="btn-import-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Open project file (.prj)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                Open (.prj)
+                <span>Open</span>
             </button>
             <input type="file" id="prj-file-input" accept=".prj,.json" class="hidden">
 
@@ -213,6 +224,9 @@ body {
 
         <!-- Calendar Config Modal Container -->
         <div id="calendar-modal-container"></div>
+
+        <!-- Workstream Color Palette Modal Container -->
+        <div id="stream-modal-container"></div>
 
     </main>
 
@@ -334,8 +348,8 @@ class Task {
     }
 }
 
-// Built-in Workstream Disciplines (including predefined SYS)
-const WORKSTREAMS = {
+// Built-in Default Workstream Disciplines
+const DEFAULT_WORKSTREAMS = {
     'HW': { name: 'Hardware / System', color: '#3b82f6', bg: '#dbeafe' },
     'EE': { name: 'Electronics / PCB', color: '#8b5cf6', bg: '#ede9fe' },
     'ME': { name: 'Mechanical / Enclosure', color: '#f59e0b', bg: '#fef3c7' },
@@ -345,6 +359,77 @@ const WORKSTREAMS = {
     'TEST': { name: 'Compliance / QA', color: '#06b6d4', bg: '#cffaff' },
     'MFG': { name: 'Manufacturing / Assembly', color: '#64748b', bg: '#f1f5f9' }
 };
+
+// Mutable active workstream dictionary
+const WORKSTREAMS = JSON.parse(JSON.stringify(DEFAULT_WORKSTREAMS));
+
+/**
+ * Generate a soft light pastel background for a given primary hex color
+ */
+function hexToBg(hex) {
+    if (!hex || typeof hex !== 'string') return '#f1f5f9';
+    let clean = hex.replace('#', '');
+    if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+    const r = parseInt(clean.substring(0, 2), 16) || 0;
+    const g = parseInt(clean.substring(2, 4), 16) || 0;
+    const b = parseInt(clean.substring(4, 6), 16) || 0;
+    // Mix 85% white + 15% color for soft tint
+    const mr = Math.round(r * 0.18 + 255 * 0.82);
+    const mg = Math.round(g * 0.18 + 255 * 0.82);
+    const mb = Math.round(b * 0.18 + 255 * 0.82);
+    return `#${((1 << 24) + (mr << 16) + (mg << 8) + mb).toString(16).slice(1)}`;
+}
+
+/**
+ * Decide whether white or dark text is more readable on a given hex color
+ */
+function getContrastTextColor(hex) {
+    if (!hex) return '#ffffff';
+    let clean = hex.replace('#', '');
+    if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+    const r = parseInt(clean.substring(0, 2), 16) || 0;
+    const g = parseInt(clean.substring(2, 4), 16) || 0;
+    const b = parseInt(clean.substring(4, 6), 16) || 0;
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.65 ? '#0f172a' : '#ffffff';
+}
+
+function updateWorkstream(code, { name, color, bg } = {}) {
+    const safe = (code || '').toUpperCase().trim();
+    if (!safe) return;
+    const current = WORKSTREAMS[safe] || { name: safe, color: '#6366f1', bg: '#e0e7ff' };
+    const nextColor = color || current.color;
+    const nextBg = bg || (color ? hexToBg(color) : current.bg);
+    WORKSTREAMS[safe] = {
+        name: name !== undefined ? name : current.name,
+        color: nextColor,
+        bg: nextBg
+    };
+    return WORKSTREAMS[safe];
+}
+
+function resetWorkstreams() {
+    Object.keys(WORKSTREAMS).forEach(k => delete WORKSTREAMS[k]);
+    Object.assign(WORKSTREAMS, JSON.parse(JSON.stringify(DEFAULT_WORKSTREAMS)));
+}
+
+function exportWorkstreams() {
+    return JSON.parse(JSON.stringify(WORKSTREAMS));
+}
+
+function importWorkstreams(data) {
+    if (!data || typeof data !== 'object') return;
+    Object.keys(data).forEach(code => {
+        const item = data[code];
+        if (item && item.color) {
+            WORKSTREAMS[code] = {
+                name: item.name || code,
+                color: item.color,
+                bg: item.bg || hexToBg(item.color)
+            };
+        }
+    });
+}
 
 // Built-in Project Stages
 const HARDWARE_STAGES = ['Concept', 'EVT', 'DVT', 'PVT', 'MP'];
@@ -360,10 +445,15 @@ const STATUS_PILLS = {
     'Complete': { label: 'Complete', class: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
 };
 
-function registerCustomWorkstream(code, name, color = '#6366f1', bg = '#e0e7ff') {
+function registerCustomWorkstream(code, name, color = '#6366f1', bg = null) {
     const safeCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!safeCode) return 'HW';
     if (!WORKSTREAMS[safeCode]) {
-        WORKSTREAMS[safeCode] = { name: name || safeCode, color, bg };
+        WORKSTREAMS[safeCode] = {
+            name: name || safeCode,
+            color,
+            bg: bg || hexToBg(color)
+        };
     }
     return safeCode;
 }
@@ -777,47 +867,114 @@ class DependencyEngine {
             this.updateWBSHierarchy(tasks, calendar);
         }
 
-        this.calculateCriticalPath(tasks);
+        this.calculateCriticalPath(tasks, calendar);
     }
 
     /**
-     * Calculate Critical Path (CPM) Total Slack
+     * Calculate Critical Path (CPM) Total Slack using standard backward pass
      */
-    static calculateCriticalPath(tasks) {
-        if (tasks.length === 0) return;
+    static calculateCriticalPath(tasks, calendar = new ProjectCalendar()) {
+        if (!tasks || tasks.length === 0) return;
+
+        const leafTasks = tasks.filter(t => !t.isSummary && t.start && t.finish);
+        if (leafTasks.length === 0) return;
 
         let maxProjectFinish = null;
-        tasks.forEach(t => {
-            if (t.finish && (!maxProjectFinish || new Date(t.finish) > new Date(maxProjectFinish))) {
+        leafTasks.forEach(t => {
+            if (!maxProjectFinish || t.finish > maxProjectFinish) {
                 maxProjectFinish = t.finish;
             }
         });
 
         if (!maxProjectFinish) return;
 
-        tasks.forEach(t => {
-            const finishDate = new Date(t.finish);
-            const projFinish = new Date(maxProjectFinish);
-            const diffDays = Math.abs((projFinish - finishDate) / (1000 * 60 * 60 * 24));
+        // Initialize Late Finish (LF) and Late Start (LS) for leaf tasks
+        leafTasks.forEach(t => {
+            t.lateFinish = maxProjectFinish;
+            const span = Math.max(1, t.duration || 0) - 1;
+            t.lateStart = CalendarEngine.shiftWorkingDays(t.lateFinish, -span, calendar);
+            t.slack = 0;
+            t.isCritical = false;
+        });
 
-            const isTargetOfPred = tasks.some(other => {
-                const otherPreds = this.parsePredecessors(other.predecessors, tasks);
-                return otherPreds.some(p => p.targetTask.id === t.id);
+        // Iterative backward pass propagating successor constraints to predecessors
+        let changed = true;
+        let iterations = 0;
+        const maxIter = leafTasks.length + 5;
+
+        while (changed && iterations++ < maxIter) {
+            changed = false;
+
+            leafTasks.forEach(task => {
+                const preds = this.parsePredecessors(task.predecessors, tasks);
+                const validPreds = preds.filter(p => p.targetTask && !p.targetTask.isSummary && p.targetTask.start && p.targetTask.finish);
+
+                validPreds.forEach(pred => {
+                    const pTask = pred.targetTask;
+                    const pSpan = Math.max(1, pTask.duration || 0) - 1;
+                    let maxAllowedFinish = pTask.lateFinish;
+
+                    switch (pred.type) {
+                        case 'SS': {
+                            const maxAllowedStart = CalendarEngine.shiftWorkingDays(task.lateStart, -pred.lag, calendar);
+                            const derivedFinish = pTask.duration > 0
+                                ? CalendarEngine.shiftWorkingDays(maxAllowedStart, pSpan, calendar)
+                                : maxAllowedStart;
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                        case 'FF': {
+                            const derivedFinish = CalendarEngine.shiftWorkingDays(task.lateFinish, -pred.lag, calendar);
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                        case 'SF': {
+                            const maxAllowedStart = CalendarEngine.shiftWorkingDays(task.lateFinish, -pred.lag, calendar);
+                            const derivedFinish = pTask.duration > 0
+                                ? CalendarEngine.shiftWorkingDays(maxAllowedStart, pSpan, calendar)
+                                : maxAllowedStart;
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                        default: { // FS
+                            const derivedFinish = CalendarEngine.shiftWorkingDays(task.lateStart, -(1 + pred.lag), calendar);
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                    }
+
+                    if (maxAllowedFinish < pTask.lateFinish) {
+                        pTask.lateFinish = maxAllowedFinish;
+                        pTask.lateStart = pTask.duration > 0
+                            ? CalendarEngine.shiftWorkingDays(pTask.lateFinish, -pSpan, calendar)
+                            : pTask.lateFinish;
+                        changed = true;
+                    }
+                });
             });
+        }
 
-            if (!isTargetOfPred && diffDays <= 1) {
-                t.isCritical = true;
-                t.slack = 0;
-            } else if (t.baseline && t.baseline.finish) {
-                const baselineFinish = new Date(t.baseline.finish);
-                const currentFinish = new Date(t.finish);
-                const drift = Math.round((currentFinish - baselineFinish) / (1000 * 60 * 60 * 24));
-                t.isCritical = drift > 0;
-                t.slack = Math.max(0, -drift);
+        // Determine critical status and total float/slack
+        leafTasks.forEach(t => {
+            if (t.lateStart && t.start) {
+                if (t.lateStart <= t.start) {
+                    t.slack = 0;
+                    t.isCritical = true;
+                } else {
+                    t.slack = CalendarEngine.getWorkingDays(t.start, t.lateStart, calendar) - 1;
+                    t.isCritical = t.slack <= 0;
+                }
             } else {
                 t.isCritical = false;
                 t.slack = 0;
             }
+        });
+
+        // Summary tasks: critical if any subtask is critical
+        const summaryTasks = tasks.filter(t => t.isSummary);
+        summaryTasks.forEach(s => {
+            s.isCritical = tasks.some(c => c.parentId === s.id && c.isCritical);
+            s.slack = 0;
         });
     }
 }
@@ -1236,7 +1393,15 @@ class WbsGridView {
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
+                            <div class="relative flex items-center">
+                                <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center font-mono"' : 'class="w-full border border-slate-200 rounded py-0.5 pr-6 text-[11px] text-center focus:outline-none focus:border-indigo-500 font-mono"'}>
+                                ${!t.isSummary ? `
+                                    <button type="button" data-action="pick-calendar" data-id="${t.id}" title="Click to open calendar pop-up" class="absolute right-1 text-slate-400 hover:text-indigo-600 transition p-0.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                    </button>
+                                    <input type="date" data-picker-for="${t.id}" value="${t.start || ''}" class="sr-only" tabindex="-1">
+                                ` : ''}
+                            </div>
                         </td>
                     ` : ''}
 
@@ -1392,6 +1557,37 @@ class WbsGridView {
                     this.onTaskChange(id, field, value);
                 }
             });
+        });
+
+        // Calendar pop-up dialog button handlers
+        this.container.querySelectorAll('[data-action="pick-calendar"]').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const id = btn.getAttribute('data-id');
+                const picker = this.container.querySelector(`input[data-picker-for="${id}"]`);
+                if (picker) {
+                    if (typeof picker.showPicker === 'function') {
+                        picker.showPicker();
+                    } else {
+                        picker.focus();
+                        picker.click();
+                    }
+                }
+            };
+        });
+
+        this.container.querySelectorAll('input[data-picker-for]').forEach(picker => {
+            picker.onchange = (e) => {
+                const id = picker.getAttribute('data-picker-for');
+                const iso = e.target.value;
+                if (iso) {
+                    const textInput = this.container.querySelector(`input[data-field="start"][data-id="${id}"]`);
+                    if (textInput) textInput.value = CalendarEngine.formatDate(iso);
+                    if (this.onTaskChange) {
+                        this.onTaskChange(id, 'start', iso);
+                    }
+                }
+            };
         });
 
         // Toolbar buttons
@@ -1715,16 +1911,15 @@ class GanttView {
         const monthsHtml = [];
         const daysHtml = [];
         
-        let curr = new Date(this.startDate);
-        const end = new Date(this.endDate);
-        
+        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
         let currentMonth = '';
         let monthWidth = 0;
 
-        while (curr <= end) {
-            const dateStr = curr.toISOString().split('T')[0];
-            const monthName = curr.toLocaleString('default', { month: 'short', year: 'numeric' });
-            const dayNum = curr.getDate();
+        for (let i = 0; i <= totalDays; i++) {
+            const dateStr = CalendarEngine.addCalendarDays(this.startDate, i);
+            const dt = new Date(dateStr + 'T00:00:00Z');
+            const monthName = dt.toLocaleString('default', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+            const dayNum = dt.getUTCDate();
 
             const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
             const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
@@ -1759,8 +1954,6 @@ class GanttView {
             } else {
                 monthWidth += this.dayWidth;
             }
-
-            curr.setDate(curr.getDate() + 1);
         }
 
         if (currentMonth) {
@@ -1775,11 +1968,10 @@ class GanttView {
 
     renderGridLines(timelineWidth, rowCount) {
         const columns = [];
-        let curr = new Date(this.startDate);
-        const end = new Date(this.endDate);
+        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
 
-        while (curr <= end) {
-            const dateStr = curr.toISOString().split('T')[0];
+        for (let i = 0; i <= totalDays; i++) {
+            const dateStr = CalendarEngine.addCalendarDays(this.startDate, i);
             const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
             const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
             const isWorking = CalendarEngine.isWorkingDay(dateStr, this.calendar);
@@ -1796,7 +1988,6 @@ class GanttView {
             columns.push(`
                 <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${bgClass}"></div>
             `);
-            curr.setDate(curr.getDate() + 1);
         }
 
         return `
@@ -1807,18 +1998,14 @@ class GanttView {
     }
 
     dateToPixel(dateStr) {
-        if (!dateStr) return 0;
-        const d = new Date(dateStr);
-        const start = new Date(this.startDate);
-        const days = (d - start) / (1000 * 60 * 60 * 24);
-        return Math.max(0, days * this.dayWidth);
+        if (!dateStr || !this.startDate) return 0;
+        const diffDays = Math.round((new Date(dateStr + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
+        return Math.max(0, diffDays * this.dayWidth);
     }
 
     pixelToDate(px) {
         const days = Math.round(px / this.dayWidth);
-        const start = new Date(this.startDate);
-        start.setDate(start.getDate() + days);
-        return start.toISOString().split('T')[0];
+        return CalendarEngine.addCalendarDays(this.startDate, days);
     }
 
     renderTaskBar(task, rowIndex) {
@@ -1884,12 +2071,13 @@ class GanttView {
         }
 
         const barColor = isCritical ? '#ef4444' : ws.color;
+        const textColor = isCritical ? '#ffffff' : getContrastTextColor(barColor);
         const progressWidth = `${task.progress || 0}%`;
 
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
+            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
@@ -2002,6 +2190,8 @@ class GanttView {
         let initialTaskStart = null;
         let initialDuration = 1;
         let draggedBarElement = null;
+        let initialX = 0;
+        let initialWidth = 0;
 
         const onMouseDown = (e) => {
             const handle = e.target.closest('[data-handle="right"]');
@@ -2016,8 +2206,10 @@ class GanttView {
             isResizing = Boolean(handle);
             startMouseX = e.clientX;
             initialTaskStart = task.start;
-            initialDuration = task.duration;
+            initialDuration = task.duration || 1;
             draggedBarElement = bar;
+            initialX = parseFloat(bar.style.left) || this.dateToPixel(task.start);
+            initialWidth = parseFloat(bar.style.width) || this.dayWidth;
 
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
@@ -2027,35 +2219,52 @@ class GanttView {
             if (!activeTaskId || !draggedBarElement) return;
 
             const deltaPx = e.clientX - startMouseX;
-            const deltaDays = Math.round(deltaPx / this.dayWidth);
-            const task = this.tasks.find(t => t.id === activeTaskId);
-            if (!task) return;
 
             if (isResizing) {
-                const newDuration = Math.max(1, initialDuration + deltaDays);
-                task.duration = newDuration;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                const newWidth = Math.max(this.dayWidth, initialWidth + deltaPx);
+                draggedBarElement.style.width = `${newWidth}px`;
             } else {
-                const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
-                task.start = newStart;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                const newX = Math.max(0, initialX + deltaPx);
+                draggedBarElement.style.left = `${newX}px`;
             }
-
-            this.render(this.tasks, this.calendar);
         };
 
-        const onMouseUp = () => {
+        const onMouseUp = (e) => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
 
-            if (activeTaskId && this.onTaskUpdate) {
-                this.onTaskUpdate(activeTaskId);
+            if (activeTaskId) {
+                const deltaPx = e.clientX - startMouseX;
+                const deltaDays = Math.round(deltaPx / this.dayWidth);
+                const task = this.tasks.find(t => t.id === activeTaskId);
+
+                if (task) {
+                    if (isResizing) {
+                        const newDuration = Math.max(1, initialDuration + deltaDays);
+                        task.duration = newDuration;
+                        task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                    } else if (deltaDays !== 0) {
+                        const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
+                        task.start = newStart;
+                        task.finish = task.duration > 0
+                            ? DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar)
+                            : task.start;
+                    }
+                }
+
+                if (this.onTaskUpdate) {
+                    this.onTaskUpdate(activeTaskId);
+                }
             }
 
             activeTaskId = null;
             draggedBarElement = null;
         };
 
+        if (this._onGanttMouseDown) {
+            pane.removeEventListener('mousedown', this._onGanttMouseDown);
+        }
+        this._onGanttMouseDown = onMouseDown;
         pane.addEventListener('mousedown', onMouseDown);
     }
 
@@ -2190,6 +2399,7 @@ class MilestonesView {
 
 
 
+
 class ResourceView {
     constructor(containerElement, onResourceChange) {
         this.container = containerElement;
@@ -2260,14 +2470,19 @@ class ResourceView {
 
                     <!-- Right: Fractional Workload Heatmap Matrix -->
                     <div class="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                        <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center">
-                            <span>Engineer Daily Workload Heatmap (% Fractional Loading)</span>
+                        <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center flex-wrap gap-2">
+                            <div class="flex items-center gap-2">
+                                <span>Engineer Daily Workload Heatmap (% Loading)</span>
+                                <button id="btn-heatmap-today" class="px-2 py-0.5 bg-white hover:bg-slate-200 border border-slate-300 rounded text-[10px] font-semibold text-slate-700 shadow-2xs transition">
+                                    Jump to Today
+                                </button>
+                            </div>
                             <div class="flex items-center gap-2 text-[10px]">
                                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-200 rounded"></span> ≤100% Normal</span>
                                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-500 rounded"></span> >100% Over-Allocated</span>
                             </div>
                         </div>
-                        <div class="flex-1 overflow-auto">
+                        <div class="flex-1 overflow-x-auto overflow-y-auto heatmap-scroll-container">
                             ${this.renderHeatmapMatrix(this.resources, this.tasks)}
                         </div>
                     </div>
@@ -2280,13 +2495,32 @@ class ResourceView {
     }
 
     renderHeatmapMatrix(resources, tasks) {
-        const dates = [];
-        let curr = new Date();
-        curr.setDate(curr.getDate() - 2);
+        let minStart = null;
+        let maxFinish = null;
 
-        for (let i = 0; i < 21; i++) {
-            dates.push(curr.toISOString().split('T')[0]);
-            curr.setDate(curr.getDate() + 1);
+        tasks.forEach(t => {
+            if (t.start && (!minStart || t.start < minStart)) minStart = t.start;
+            if (t.finish && (!maxFinish || t.finish > maxFinish)) maxFinish = t.finish;
+        });
+
+        const todayIso = new Date().toISOString().split('T')[0];
+        if (!minStart) minStart = todayIso;
+        if (!maxFinish) maxFinish = CalendarEngine.addCalendarDays(minStart, 30);
+
+        // Pad timeline bounds slightly so all task dates and margins are clearly visible
+        let startRange = CalendarEngine.addCalendarDays(minStart, -3);
+        let endRange = CalendarEngine.addCalendarDays(maxFinish, 7);
+
+        // Ensure minimum 30 days span
+        let daySpan = Math.round((new Date(endRange + 'T00:00:00Z') - new Date(startRange + 'T00:00:00Z')) / 86400000);
+        if (daySpan < 30) {
+            endRange = CalendarEngine.addCalendarDays(startRange, 30);
+            daySpan = 30;
+        }
+
+        const dates = [];
+        for (let i = 0; i <= daySpan; i++) {
+            dates.push(CalendarEngine.addCalendarDays(startRange, i));
         }
 
         // Map fractional workload per resource per date: resourceId_date -> sum of allocation units %
@@ -2302,41 +2536,45 @@ class ResourceView {
                 if (!res) return;
 
                 const units = typeof a.units === 'number' ? a.units : 100;
-                let d = new Date(task.start);
-                const finishDate = new Date(task.finish);
+                let cur = task.start;
 
-                while (d <= finishDate) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    const key = `${res.id}_${dateStr}`;
+                while (cur <= task.finish) {
+                    const key = `${res.id}_${cur}`;
                     const currentLoad = workloadMap.get(key) || 0;
                     workloadMap.set(key, currentLoad + units);
-                    d.setDate(d.getDate() + 1);
+                    cur = CalendarEngine.addCalendarDays(cur, 1);
                 }
             });
         });
 
         return `
             <table class="w-full text-left text-xs border-collapse">
-                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0 z-10">
                     <tr>
-                        <th class="p-2 border-r border-slate-200 min-w-[120px] bg-slate-100">Engineer</th>
+                        <th class="p-2 border-r border-slate-200 min-w-[120px] bg-slate-100 sticky left-0 z-20">Engineer</th>
                         ${dates.map(d => {
-                            const dateObj = new Date(d);
-                            const dayNum = dateObj.getDate();
-                            const monthShort = dateObj.toLocaleString('default', { month: 'short' });
-                            return `<th class="p-1 text-center border-r border-slate-200 min-w-[36px] text-[10px]">${monthShort}<br>${dayNum}</th>`;
+                            const dateObj = new Date(d + 'T00:00:00Z');
+                            const dayNum = dateObj.getUTCDate();
+                            const monthShort = dateObj.toLocaleString('default', { month: 'short', timeZone: 'UTC' });
+                            const isToday = d === todayIso;
+                            return `
+                                <th class="p-1 text-center border-r border-slate-200 min-w-[36px] text-[10px] ${isToday ? 'bg-indigo-100 text-indigo-900 font-bold border-b-2 border-indigo-600' : ''}" data-is-today="${isToday}" data-date="${d}">
+                                    ${monthShort}<br>${dayNum}
+                                </th>
+                            `;
                         }).join('')}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     ${resources.map(res => `
                         <tr>
-                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-slate-50/50">
+                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-slate-50/90 sticky left-0 z-10">
                                 ${this.escapeHtml(res.name)}
                             </td>
                             ${dates.map(d => {
                                 const key = `${res.id}_${d}`;
                                 const load = workloadMap.get(key) || 0;
+                                const isToday = d === todayIso;
 
                                 let bgClass = 'bg-white text-slate-300';
                                 if (load > 0 && load <= 100) {
@@ -2346,7 +2584,7 @@ class ResourceView {
                                 }
 
                                 return `
-                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} text-[10px]" title="${res.name}: ${load}% total allocation on ${d}">
+                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} ${isToday ? 'border-x-2 border-indigo-300' : ''} text-[10px]" title="${res.name}: ${load}% total allocation on ${CalendarEngine.formatDate(d)}">
                                         ${load > 0 ? `${load}%` : '-'}
                                     </td>
                                 `;
@@ -2387,6 +2625,16 @@ class ResourceView {
                 this.render(this.resources, this.tasks);
             };
         });
+
+        const todayBtn = this.container.querySelector('#btn-heatmap-today');
+        if (todayBtn) {
+            todayBtn.onclick = () => {
+                const todayTh = this.container.querySelector('[data-is-today="true"]');
+                if (todayTh) {
+                    todayTh.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }
+            };
+        }
     }
 
     escapeHtml(str) {
@@ -2657,6 +2905,232 @@ class CalendarModalView {
 
 
 
+// --- Module: js/views/streamModalView.js ---
+/**
+ * Stream Modal View: Customizes workstream colors and definitions
+ */
+
+
+
+class StreamModalView {
+    constructor(modalContainer, onStreamsChange) {
+        this.container = modalContainer;
+        this.onStreamsChange = onStreamsChange;
+        this.isOpen = false;
+    }
+
+    open() {
+        this.isOpen = true;
+        this.render();
+    }
+
+    close() {
+        this.isOpen = false;
+        if (this.container) this.container.innerHTML = '';
+    }
+
+    render() {
+        if (!this.container || !this.isOpen) return;
+
+        const streamEntries = Object.entries(WORKSTREAMS);
+
+        const html = `
+            <div id="stream-modal-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+                    <!-- Header -->
+                    <div class="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between flex-shrink-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🎨</span>
+                            <h3 class="font-bold text-sm">Workstream Palette & Color Customizer</h3>
+                        </div>
+                        <button id="stream-modal-close" class="text-slate-400 hover:text-white font-bold p-1">✕</button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="p-5 overflow-y-auto space-y-5 text-xs text-slate-700 flex-1">
+                        <p class="text-slate-500 text-[11px]">
+                            Customize workstream colors to improve visual separation on the Gantt chart and activity tables. Changes update task bars, grid pills, and PERT nodes instantly.
+                        </p>
+
+                        <!-- Streams Table -->
+                        <div class="border border-slate-200 rounded-lg overflow-hidden shadow-xs">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-2 px-3 w-16">Code</th>
+                                        <th class="py-2 px-3">Discipline Name</th>
+                                        <th class="py-2 px-3 w-28 text-center">Color Picker</th>
+                                        <th class="py-2 px-3 w-32 text-center">Live Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 font-medium">
+                                    ${streamEntries.map(([code, s]) => {
+                                        const textColor = getContrastTextColor(s.color);
+                                        return `
+                                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                                <td class="py-2 px-3 font-mono font-bold text-slate-800 text-[11px]">${code}</td>
+                                                <td class="py-2 px-3">
+                                                    <input type="text" data-action="edit-name" data-code="${code}" value="${this.escapeHtml(s.name)}" class="w-full border border-transparent hover:border-slate-300 focus:border-indigo-500 rounded px-1.5 py-0.5 text-xs focus:outline-none">
+                                                </td>
+                                                <td class="py-2 px-3 text-center">
+                                                    <div class="inline-flex items-center gap-1.5">
+                                                        <input type="color" data-action="pick-color" data-code="${code}" value="${s.color}" class="w-7 h-7 rounded border border-slate-300 cursor-pointer p-0 bg-transparent">
+                                                        <span class="font-mono text-[10px] text-slate-400 uppercase">${s.color}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="py-2 px-3 text-center">
+                                                    <div class="flex flex-col gap-1 items-center">
+                                                        <!-- Gantt Bar Preview -->
+                                                        <span id="preview-bar-${code}" class="inline-block px-2 py-0.5 rounded text-[10px] font-bold shadow-xs truncate max-w-[110px]" style="background-color: ${s.color}; color: ${textColor};">
+                                                            ${code} Bar
+                                                        </span>
+                                                        <!-- Pill Preview -->
+                                                        <span id="preview-pill-${code}" class="inline-block px-1.5 py-0.2 rounded text-[9px] font-semibold truncate max-w-[110px]" style="background-color: ${s.bg}; color: ${s.color};">
+                                                            ${code} Pill
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Add Custom Stream Form -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
+                            <h4 class="font-bold text-slate-800 text-[11px] uppercase tracking-wide flex items-center gap-1.5">
+                                <span>+</span> Add Custom Workstream
+                            </h4>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <input type="text" id="new-stream-code" placeholder="Code (e.g. REL)" maxlength="6" class="w-24 uppercase font-mono border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <input type="text" id="new-stream-name" placeholder="Name (e.g. Reliability & Testing)" class="flex-1 min-w-[160px] border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-indigo-500">
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[10px] text-slate-400">Color:</span>
+                                    <input type="color" id="new-stream-color" value="#0284c7" class="w-7 h-7 rounded border border-slate-300 cursor-pointer p-0 bg-transparent">
+                                </div>
+                                <button id="btn-add-stream" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium shadow-xs transition text-xs">
+                                    + Add Stream
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="px-5 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between flex-shrink-0">
+                        <button id="btn-reset-streams" class="px-3 py-1 text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-300 rounded font-medium text-xs transition">
+                            Reset to Defaults
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <button id="stream-modal-apply" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs shadow-xs transition">
+                                Apply & Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.container.innerHTML = html;
+        this.attachEventListeners();
+    }
+
+    attachEventListeners() {
+        if (!this.container) return;
+
+        // Close handlers
+        const closeBtn = this.container.querySelector('#stream-modal-close');
+        if (closeBtn) closeBtn.onclick = () => this.close();
+
+        const applyBtn = this.container.querySelector('#stream-modal-apply');
+        if (applyBtn) {
+            applyBtn.onclick = () => {
+                if (this.onStreamsChange) this.onStreamsChange();
+                this.close();
+            };
+        }
+
+        // Color pickers (live updates)
+        this.container.querySelectorAll('[data-action="pick-color"]').forEach(input => {
+            input.oninput = (e) => {
+                const code = input.getAttribute('data-code');
+                const newColor = e.target.value;
+                const newBg = hexToBg(newColor);
+                const textColor = getContrastTextColor(newColor);
+
+                updateWorkstream(code, { color: newColor, bg: newBg });
+
+                // Update live previews in modal
+                const barPreview = this.container.querySelector(`#preview-bar-${code}`);
+                if (barPreview) {
+                    barPreview.style.backgroundColor = newColor;
+                    barPreview.style.color = textColor;
+                }
+                const pillPreview = this.container.querySelector(`#preview-pill-${code}`);
+                if (pillPreview) {
+                    pillPreview.style.backgroundColor = newBg;
+                    pillPreview.style.color = newColor;
+                }
+                const hexLabel = input.nextElementSibling;
+                if (hexLabel) hexLabel.textContent = newColor;
+
+                // Notify live changes so background views re-render
+                if (this.onStreamsChange) this.onStreamsChange();
+            };
+        });
+
+        // Name edits
+        this.container.querySelectorAll('[data-action="edit-name"]').forEach(input => {
+            input.onchange = (e) => {
+                const code = input.getAttribute('data-code');
+                updateWorkstream(code, { name: e.target.value });
+                if (this.onStreamsChange) this.onStreamsChange();
+            };
+        });
+
+        // Add custom stream
+        const addBtn = this.container.querySelector('#btn-add-stream');
+        if (addBtn) {
+            addBtn.onclick = () => {
+                const codeInput = this.container.querySelector('#new-stream-code');
+                const nameInput = this.container.querySelector('#new-stream-name');
+                const colorInput = this.container.querySelector('#new-stream-color');
+
+                const code = (codeInput?.value || '').trim();
+                const name = (nameInput?.value || '').trim();
+                const color = colorInput?.value || '#0284c7';
+
+                if (!code) {
+                    alert('Please enter a workstream code (e.g. REL)');
+                    return;
+                }
+
+                registerCustomWorkstream(code, name || code, color);
+                this.render();
+                if (this.onStreamsChange) this.onStreamsChange();
+            };
+        }
+
+        // Reset to defaults
+        const resetBtn = this.container.querySelector('#btn-reset-streams');
+        if (resetBtn) {
+            resetBtn.onclick = () => {
+                if (confirm('Reset all workstream colors and labels to standard defaults?')) {
+                    resetWorkstreams();
+                    this.render();
+                    if (this.onStreamsChange) this.onStreamsChange();
+                }
+            };
+        }
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+}
+
+
+
 // --- Module: js/views/dependencyTreeView.js ---
 /**
  * Dependency Tree & Network Diagram View (PERT Chart):
@@ -2716,15 +3190,25 @@ class DependencyTreeView {
 
         // Group tasks by Stage for horizontal pipeline alignment
         const stageMap = new Map();
-        HARDWARE_STAGES.forEach(stg => stageMap.set(stg, []));
         leafTasks.forEach(t => {
             const stg = t.stage || 'EVT';
             if (!stageMap.has(stg)) stageMap.set(stg, []);
             stageMap.get(stg).push(t);
         });
 
-        // Generate Node Cards per stage
-        const columnsHtml = HARDWARE_STAGES.map(stage => {
+        // Determine relevant stages in developmental lifecycle order (only stages with active tasks)
+        const presentStages = new Set(stageMap.keys());
+        const orderedStages = [
+            ...HARDWARE_STAGES.filter(s => presentStages.has(s) && (stageMap.get(s) || []).length > 0),
+            ...Array.from(presentStages).filter(s => !HARDWARE_STAGES.includes(s) && (stageMap.get(s) || []).length > 0)
+        ];
+
+        if (orderedStages.length === 0) {
+            return `<div class="p-8 text-center text-slate-400 italic">No stage activities found.</div>`;
+        }
+
+        // Generate Node Cards only for relevant stages
+        const columnsHtml = orderedStages.map(stage => {
             const stageTasks = stageMap.get(stage) || [];
             return `
                 <div class="stage-flow-column flex-shrink-0 w-72 flex flex-col gap-4">
@@ -2993,19 +3477,42 @@ class InfoGuideView {
 const STORAGE_KEY = 'hardware_pm_project_data';
 
 class ProjectStore {
-    
+    // Retain active file handle from File System Access API
+    static currentFileHandle = null;
+    static currentFileName = null;
+
     /**
-     * Auto-save current tasks, resources, and calendar to LocalStorage
+     * Build standardized payload object
+     */
+    static buildPayload(projectTitle, tasks, resources, calendar) {
+        return {
+            appName: 'Project Management Tool',
+            fileFormat: 'hardware_pm_prj',
+            version: '1.2',
+            exportedAt: new Date().toISOString(),
+            project: {
+                title: projectTitle || 'Project Management Schedule',
+                tasks: tasks,
+                resources: resources,
+                calendar: calendar,
+                workstreams: exportWorkstreams()
+            }
+        };
+    }
+
+    /**
+     * Auto-save current tasks, resources, calendar, and workstreams to LocalStorage
      */
     static saveToLocalStorage(projectTitle, tasks, resources, calendar) {
         try {
             const payload = {
-                version: '1.1',
-                title: projectTitle || 'Hardware Project',
+                version: '1.2',
+                title: projectTitle || 'Project Management Schedule',
                 updatedAt: new Date().toISOString(),
                 tasks: tasks,
                 resources: resources,
-                calendar: calendar
+                calendar: calendar,
+                workstreams: exportWorkstreams()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch (e) {
@@ -3014,15 +3521,18 @@ class ProjectStore {
     }
 
     /**
-     * Load tasks, resources, and calendar from LocalStorage
+     * Load tasks, resources, calendar, and workstreams from LocalStorage
      */
     static loadFromLocalStorage() {
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return null;
             const data = JSON.parse(raw);
+            if (data.workstreams) {
+                importWorkstreams(data.workstreams);
+            }
             return {
-                title: data.title || 'Hardware Project',
+                title: data.title || 'Project Management Schedule',
                 tasks: (data.tasks || []).map(t => new Task(t)),
                 resources: (data.resources || []).map(r => new Resource(r)),
                 calendar: new ProjectCalendar(data.calendar || {})
@@ -3034,34 +3544,108 @@ class ProjectStore {
     }
 
     /**
-     * Export project file as .prj (JSON format)
+     * In-place Save (Ctrl+S / Save button): writes back to currentFileHandle if available, otherwise Save As
      */
-    static exportProjectFile(projectTitle, tasks, resources, calendar) {
-        const payload = {
-            appName: 'Antigravity Hardware PM',
-            fileFormat: 'hardware_pm_prj',
-            version: '1.1',
-            exportedAt: new Date().toISOString(),
-            project: {
-                title: projectTitle || 'Hardware R&D Project',
-                tasks: tasks,
-                resources: resources,
-                calendar: calendar
-            }
-        };
+    static async saveProjectFileInPlace(projectTitle, tasks, resources, calendar) {
+        this.saveToLocalStorage(projectTitle, tasks, resources, calendar);
 
+        if (this.currentFileHandle && 'createWritable' in this.currentFileHandle) {
+            try {
+                const payload = this.buildPayload(projectTitle, tasks, resources, calendar);
+                const writable = await this.currentFileHandle.createWritable();
+                await writable.write(JSON.stringify(payload, null, 2));
+                await writable.close();
+                return { success: true, mode: 'inplace', fileName: this.currentFileHandle.name };
+            } catch (err) {
+                console.warn('In-place write failed, falling back to Save As:', err);
+            }
+        }
+
+        // If no file handle exists, invoke Save As
+        return await this.saveProjectFileAs(projectTitle, tasks, resources, calendar);
+    }
+
+    /**
+     * Save As button: prompt for new destination/filename via File System Access API or download fallback
+     */
+    static async saveProjectFileAs(projectTitle, tasks, resources, calendar) {
+        this.saveToLocalStorage(projectTitle, tasks, resources, calendar);
+        const payload = this.buildPayload(projectTitle, tasks, resources, calendar);
         const jsonStr = JSON.stringify(payload, null, 2);
+        const safeName = `${(projectTitle || 'Project').replace(/[^a-z0-9_-]/gi, '_')}.prj`;
+
+        // Modern File System Access API
+        if (typeof window.showSaveFilePicker === 'function') {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: safeName,
+                    types: [{
+                        description: 'Project Management File (*.prj)',
+                        accept: { 'application/json': ['.prj', '.json'] }
+                    }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(jsonStr);
+                await writable.close();
+                this.currentFileHandle = handle;
+                this.currentFileName = handle.name;
+                return { success: true, mode: 'saveas', fileName: handle.name };
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    return { success: false, aborted: true };
+                }
+                console.warn('showSaveFilePicker failed, falling back to download:', err);
+            }
+        }
+
+        // Fallback: standard file download
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        
-        const safeName = (projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_');
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${safeName}.prj`;
+        link.download = safeName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        this.currentFileName = safeName;
+        return { success: true, mode: 'download', fileName: safeName };
+    }
+
+    /**
+     * Legacy Export helper
+     */
+    static exportProjectFile(projectTitle, tasks, resources, calendar) {
+        this.saveProjectFileAs(projectTitle, tasks, resources, calendar);
+    }
+
+    /**
+     * Open File via modern File System Access API with handle retention
+     */
+    static async openProjectFileWithPicker() {
+        if (typeof window.showOpenFilePicker === 'function') {
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    multiple: false,
+                    types: [{
+                        description: 'Project Management File (*.prj, *.json)',
+                        accept: { 'application/json': ['.prj', '.json'] }
+                    }]
+                });
+                const file = await handle.getFile();
+                const content = await file.text();
+                const imported = this.importProjectFile(content);
+                if (imported) {
+                    this.currentFileHandle = handle;
+                    this.currentFileName = handle.name;
+                    return { success: true, imported, fileName: handle.name };
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return { success: false, aborted: true };
+                console.warn('showOpenFilePicker error:', err);
+            }
+        }
+        return null;
     }
 
     /**
@@ -3073,15 +3657,22 @@ class ProjectStore {
             let rawTasks = [];
             let rawResources = [];
             let rawCalendar = {};
+            let rawStreams = null;
 
             if (data.project) {
                 rawTasks = data.project.tasks || [];
                 rawResources = data.project.resources || [];
                 rawCalendar = data.project.calendar || {};
+                rawStreams = data.project.workstreams;
             } else {
                 rawTasks = data.tasks || [];
                 rawResources = data.resources || [];
                 rawCalendar = data.calendar || {};
+                rawStreams = data.workstreams;
+            }
+
+            if (rawStreams) {
+                importWorkstreams(rawStreams);
             }
 
             const tasks = rawTasks.map(t => new Task(t));
@@ -3495,6 +4086,7 @@ class PrintEngine {
 
 
 
+
 class ProjectManagementApp {
     constructor() {
         this.projectTitle = 'Project Management Schedule';
@@ -3511,8 +4103,10 @@ class ProjectManagementApp {
         this.milestonesView = null;
         this.resourceView = null;
         this.calendarModalView = null;
+        this.streamModalView = null;
         this.deptreeView = null;
         this.infoGuideView = null;
+        this._toastTimer = null;
     }
 
     init() {
@@ -3543,6 +4137,7 @@ class ProjectManagementApp {
         const deptreeContainer = document.getElementById('deptree-view-container');
         const infoGuideContainer = document.getElementById('info-guide-view-container');
         const calendarModalContainer = document.getElementById('calendar-modal-container');
+        const streamModalContainer = document.getElementById('stream-modal-container');
 
         this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
         this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
@@ -3558,6 +4153,11 @@ class ProjectManagementApp {
         this.calendarModalView = new CalendarModalView(calendarModalContainer, (updatedCal) => {
             this.calendar = updatedCal;
             DependencyEngine.scheduleProject(this.tasks, this.calendar);
+            this.renderAllViews();
+        });
+
+        this.streamModalView = new StreamModalView(streamModalContainer, () => {
+            ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks, this.resources, this.calendar);
             this.renderAllViews();
         });
 
@@ -3747,6 +4347,25 @@ class ProjectManagementApp {
     }
 
     /**
+     * Re-index predecessor strings following hierarchy, sorting, or deletion changes.
+     * Takes a Map of [taskId, Array<ParsedPredecessor>] captured BEFORE mutation.
+     */
+    reindexPredecessors(parsedMap) {
+        DependencyEngine.updateWBSHierarchy(this.tasks, this.calendar);
+        const validTaskIds = new Set(this.tasks.map(t => t.id));
+
+        this.tasks.forEach(t => {
+            const preds = parsedMap.get(t.id) || [];
+            if (preds.length === 0) return;
+            const validPreds = preds.filter(p => p.targetTask && validTaskIds.has(p.targetTask.id));
+            t.predecessors = validPreds.map(p => {
+                const lag = p.lag > 0 ? `+${p.lag}d` : (p.lag < 0 ? `${p.lag}d` : '');
+                return `${p.targetTask.wbs}${p.type}${lag}`;
+            }).join(', ');
+        });
+    }
+
+    /**
      * Move a task (with its subtasks) before/after a target task; predecessor references follow the new WBS numbers
      */
     moveTask(dragId, targetId, position) {
@@ -3771,15 +4390,7 @@ class ProjectManagementApp {
         rest.splice(insertAt, 0, ...block);
         this.tasks = rest;
 
-        DependencyEngine.updateWBSHierarchy(this.tasks, this.calendar);
-        this.tasks.forEach(t => {
-            const preds = parsed.get(t.id) || [];
-            if (preds.length === 0) return;
-            t.predecessors = preds.map(p => {
-                const lag = p.lag > 0 ? `+${p.lag}d` : (p.lag < 0 ? `${p.lag}d` : '');
-                return `${p.targetTask.wbs}${p.type}${lag}`;
-            }).join(', ');
-        });
+        this.reindexPredecessors(parsed);
         this.selectedTaskId = dragId;
     }
 
@@ -3791,9 +4402,11 @@ class ProjectManagementApp {
         const prevTask = this.tasks[index - 1];
 
         if (prevTask) {
+            const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
             task.parentId = prevTask.id;
             prevTask.isSummary = true;
             prevTask.expanded = true;
+            this.reindexPredecessors(parsed);
         }
     }
 
@@ -3801,11 +4414,14 @@ class ProjectManagementApp {
         const task = this.tasks.find(t => t.id === taskId);
         if (!task || !task.parentId) return;
 
+        const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
         const parent = this.tasks.find(t => t.id === task.parentId);
         task.parentId = parent ? parent.parentId : null;
+        this.reindexPredecessors(parsed);
     }
 
     deleteTaskRecursive(taskId) {
+        const parsed = new Map(this.tasks.map(t => [t.id, DependencyEngine.parsePredecessors(t.predecessors, this.tasks)]));
         const toDelete = new Set([taskId]);
         let added = true;
         while (added) {
@@ -3818,6 +4434,7 @@ class ProjectManagementApp {
             });
         }
         this.tasks = this.tasks.filter(t => !toDelete.has(t.id));
+        this.reindexPredecessors(parsed);
     }
 
     bindHeaderControls() {
@@ -3890,22 +4507,65 @@ class ProjectManagementApp {
             };
         }
 
-        // Import / Export Controls
+        // Workstream Palette Modal Trigger
+        const btnStreams = document.getElementById('btn-streams');
+        if (btnStreams) {
+            btnStreams.onclick = () => {
+                if (this.streamModalView) this.streamModalView.open();
+            };
+        }
+
+        // Save Controls (Ctrl+S / In-place Save vs Save As)
+        const btnSavePrj = document.getElementById('btn-save-prj');
+        if (btnSavePrj) {
+            btnSavePrj.onclick = () => this.saveInPlace();
+        }
+
+        const btnSaveAsPrj = document.getElementById('btn-save-as-prj');
+        if (btnSaveAsPrj) {
+            btnSaveAsPrj.onclick = () => this.saveAs();
+        }
+
+        // Legacy export button alias if present
         const btnExportPrj = document.getElementById('btn-export-prj');
         if (btnExportPrj) {
-            btnExportPrj.onclick = () => ProjectStore.exportProjectFile(this.projectTitle, this.tasks, this.resources, this.calendar);
+            btnExportPrj.onclick = () => this.saveInPlace();
         }
 
-        const btnExportExcel = document.getElementById('btn-export-excel');
-        if (btnExportExcel) {
-            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks, this.resources, this.calendar);
-        }
+        // Global Shortcut: Ctrl+S or Cmd+S for in-place save
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                this.saveInPlace();
+            }
+        });
 
+        // Modern File Open (.prj)
         const btnImportPrj = document.getElementById('btn-import-prj');
         const fileInput = document.getElementById('prj-file-input');
 
-        if (btnImportPrj && fileInput) {
-            btnImportPrj.onclick = () => fileInput.click();
+        if (btnImportPrj) {
+            btnImportPrj.onclick = async () => {
+                if (typeof window.showOpenFilePicker === 'function') {
+                    const res = await ProjectStore.openProjectFileWithPicker();
+                    if (res && res.success && res.imported) {
+                        this.projectTitle = res.imported.title;
+                        this.tasks = res.imported.tasks;
+                        this.resources = res.imported.resources;
+                        this.calendar = res.imported.calendar;
+                        DependencyEngine.scheduleProject(this.tasks, this.calendar);
+                        this.renderAllViews();
+                        this.showSaveToast(`Loaded ${res.fileName}`);
+                        return;
+                    } else if (res && res.aborted) {
+                        return;
+                    }
+                }
+                if (fileInput) fileInput.click();
+            };
+        }
+
+        if (fileInput) {
             fileInput.onchange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -3913,17 +4573,26 @@ class ProjectManagementApp {
                     reader.onload = (evt) => {
                         const imported = ProjectStore.importProjectFile(evt.target.result);
                         if (imported) {
+                            ProjectStore.currentFileHandle = null;
+                            ProjectStore.currentFileName = file.name;
                             this.projectTitle = imported.title;
                             this.tasks = imported.tasks;
                             this.resources = imported.resources;
                             this.calendar = imported.calendar;
                             DependencyEngine.scheduleProject(this.tasks, this.calendar);
                             this.renderAllViews();
+                            this.showSaveToast(`Loaded ${file.name}`);
                         }
                     };
                     reader.readAsText(file);
                 }
+                fileInput.value = '';
             };
+        }
+
+        const btnExportExcel = document.getElementById('btn-export-excel');
+        if (btnExportExcel) {
+            btnExportExcel.onclick = () => ExcelExporter.exportToExcel(this.projectTitle, this.tasks, this.resources, this.calendar);
         }
 
         // Presets & New Project Dropdown
@@ -4007,6 +4676,53 @@ class ProjectManagementApp {
                 document.onmouseup = null;
             };
         };
+    }
+
+    async saveInPlace() {
+        const res = await ProjectStore.saveProjectFileInPlace(this.projectTitle, this.tasks, this.resources, this.calendar);
+        if (res && res.success) {
+            this.showSaveToast(`Saved successfully to ${res.fileName || 'file'}`);
+        } else if (res && !res.aborted) {
+            this.showSaveToast('Failed to save project file.', true);
+        }
+    }
+
+    async saveAs() {
+        const res = await ProjectStore.saveProjectFileAs(this.projectTitle, this.tasks, this.resources, this.calendar);
+        if (res && res.success) {
+            this.showSaveToast(`Saved copy to ${res.fileName || 'file'}`);
+        } else if (res && !res.aborted) {
+            this.showSaveToast('Failed to save project file.', true);
+        }
+    }
+
+    showSaveToast(message, isError = false) {
+        let toast = document.getElementById('app-save-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'app-save-toast';
+            document.body.appendChild(toast);
+        }
+
+        toast.className = isError
+            ? 'fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold flex items-center gap-2 transition-all duration-300 bg-red-600 text-white translate-y-0 opacity-100 pointer-events-none'
+            : 'fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold flex items-center gap-2 transition-all duration-300 bg-slate-900 text-emerald-400 border border-slate-700 translate-y-0 opacity-100 pointer-events-none';
+
+        toast.innerHTML = isError
+            ? `<svg class="w-4 h-4 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> <span>${this.escapeHtml(message)}</span>`
+            : `<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> <span>${this.escapeHtml(message)}</span>`;
+
+        if (this._toastTimer) clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => {
+            if (toast) {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-12', 'opacity-0');
+            }
+        }, 3000);
+    }
+
+    escapeHtml(str) {
+        return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 }
 

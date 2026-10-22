@@ -2,7 +2,7 @@
  * Gantt View Component: Interactive SVG Timeline, Enhanced Dependency Arrows, Baseline Ghost Bars & Bidirectional Drag & Drop
  */
 
-import { WORKSTREAMS } from '../models/taskModel.js';
+import { WORKSTREAMS, getContrastTextColor } from '../models/taskModel.js';
 import { DependencyEngine } from '../engine/dependencyEngine.js';
 import { BaselineEngine } from '../engine/baselineEngine.js';
 import { CalendarEngine } from '../engine/calendarEngine.js';
@@ -158,16 +158,15 @@ export class GanttView {
         const monthsHtml = [];
         const daysHtml = [];
         
-        let curr = new Date(this.startDate);
-        const end = new Date(this.endDate);
-        
+        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
         let currentMonth = '';
         let monthWidth = 0;
 
-        while (curr <= end) {
-            const dateStr = curr.toISOString().split('T')[0];
-            const monthName = curr.toLocaleString('default', { month: 'short', year: 'numeric' });
-            const dayNum = curr.getDate();
+        for (let i = 0; i <= totalDays; i++) {
+            const dateStr = CalendarEngine.addCalendarDays(this.startDate, i);
+            const dt = new Date(dateStr + 'T00:00:00Z');
+            const monthName = dt.toLocaleString('default', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+            const dayNum = dt.getUTCDate();
 
             const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
             const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
@@ -202,8 +201,6 @@ export class GanttView {
             } else {
                 monthWidth += this.dayWidth;
             }
-
-            curr.setDate(curr.getDate() + 1);
         }
 
         if (currentMonth) {
@@ -218,11 +215,10 @@ export class GanttView {
 
     renderGridLines(timelineWidth, rowCount) {
         const columns = [];
-        let curr = new Date(this.startDate);
-        const end = new Date(this.endDate);
+        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
 
-        while (curr <= end) {
-            const dateStr = curr.toISOString().split('T')[0];
+        for (let i = 0; i <= totalDays; i++) {
+            const dateStr = CalendarEngine.addCalendarDays(this.startDate, i);
             const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
             const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
             const isWorking = CalendarEngine.isWorkingDay(dateStr, this.calendar);
@@ -239,7 +235,6 @@ export class GanttView {
             columns.push(`
                 <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${bgClass}"></div>
             `);
-            curr.setDate(curr.getDate() + 1);
         }
 
         return `
@@ -250,18 +245,14 @@ export class GanttView {
     }
 
     dateToPixel(dateStr) {
-        if (!dateStr) return 0;
-        const d = new Date(dateStr);
-        const start = new Date(this.startDate);
-        const days = (d - start) / (1000 * 60 * 60 * 24);
-        return Math.max(0, days * this.dayWidth);
+        if (!dateStr || !this.startDate) return 0;
+        const diffDays = Math.round((new Date(dateStr + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
+        return Math.max(0, diffDays * this.dayWidth);
     }
 
     pixelToDate(px) {
         const days = Math.round(px / this.dayWidth);
-        const start = new Date(this.startDate);
-        start.setDate(start.getDate() + days);
-        return start.toISOString().split('T')[0];
+        return CalendarEngine.addCalendarDays(this.startDate, days);
     }
 
     renderTaskBar(task, rowIndex) {
@@ -327,12 +318,13 @@ export class GanttView {
         }
 
         const barColor = isCritical ? '#ef4444' : ws.color;
+        const textColor = isCritical ? '#ffffff' : getContrastTextColor(barColor);
         const progressWidth = `${task.progress || 0}%`;
 
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
+            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
@@ -445,6 +437,8 @@ export class GanttView {
         let initialTaskStart = null;
         let initialDuration = 1;
         let draggedBarElement = null;
+        let initialX = 0;
+        let initialWidth = 0;
 
         const onMouseDown = (e) => {
             const handle = e.target.closest('[data-handle="right"]');
@@ -459,8 +453,10 @@ export class GanttView {
             isResizing = Boolean(handle);
             startMouseX = e.clientX;
             initialTaskStart = task.start;
-            initialDuration = task.duration;
+            initialDuration = task.duration || 1;
             draggedBarElement = bar;
+            initialX = parseFloat(bar.style.left) || this.dateToPixel(task.start);
+            initialWidth = parseFloat(bar.style.width) || this.dayWidth;
 
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
@@ -470,35 +466,52 @@ export class GanttView {
             if (!activeTaskId || !draggedBarElement) return;
 
             const deltaPx = e.clientX - startMouseX;
-            const deltaDays = Math.round(deltaPx / this.dayWidth);
-            const task = this.tasks.find(t => t.id === activeTaskId);
-            if (!task) return;
 
             if (isResizing) {
-                const newDuration = Math.max(1, initialDuration + deltaDays);
-                task.duration = newDuration;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                const newWidth = Math.max(this.dayWidth, initialWidth + deltaPx);
+                draggedBarElement.style.width = `${newWidth}px`;
             } else {
-                const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
-                task.start = newStart;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                const newX = Math.max(0, initialX + deltaPx);
+                draggedBarElement.style.left = `${newX}px`;
             }
-
-            this.render(this.tasks, this.calendar);
         };
 
-        const onMouseUp = () => {
+        const onMouseUp = (e) => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
 
-            if (activeTaskId && this.onTaskUpdate) {
-                this.onTaskUpdate(activeTaskId);
+            if (activeTaskId) {
+                const deltaPx = e.clientX - startMouseX;
+                const deltaDays = Math.round(deltaPx / this.dayWidth);
+                const task = this.tasks.find(t => t.id === activeTaskId);
+
+                if (task) {
+                    if (isResizing) {
+                        const newDuration = Math.max(1, initialDuration + deltaDays);
+                        task.duration = newDuration;
+                        task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                    } else if (deltaDays !== 0) {
+                        const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
+                        task.start = newStart;
+                        task.finish = task.duration > 0
+                            ? DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar)
+                            : task.start;
+                    }
+                }
+
+                if (this.onTaskUpdate) {
+                    this.onTaskUpdate(activeTaskId);
+                }
             }
 
             activeTaskId = null;
             draggedBarElement = null;
         };
 
+        if (this._onGanttMouseDown) {
+            pane.removeEventListener('mousedown', this._onGanttMouseDown);
+        }
+        this._onGanttMouseDown = onMouseDown;
         pane.addEventListener('mousedown', onMouseDown);
     }
 

@@ -113,8 +113,8 @@ export class Task {
     }
 }
 
-// Built-in Workstream Disciplines (including predefined SYS)
-export const WORKSTREAMS = {
+// Built-in Default Workstream Disciplines
+export const DEFAULT_WORKSTREAMS = {
     'HW': { name: 'Hardware / System', color: '#3b82f6', bg: '#dbeafe' },
     'EE': { name: 'Electronics / PCB', color: '#8b5cf6', bg: '#ede9fe' },
     'ME': { name: 'Mechanical / Enclosure', color: '#f59e0b', bg: '#fef3c7' },
@@ -124,6 +124,77 @@ export const WORKSTREAMS = {
     'TEST': { name: 'Compliance / QA', color: '#06b6d4', bg: '#cffaff' },
     'MFG': { name: 'Manufacturing / Assembly', color: '#64748b', bg: '#f1f5f9' }
 };
+
+// Mutable active workstream dictionary
+export const WORKSTREAMS = JSON.parse(JSON.stringify(DEFAULT_WORKSTREAMS));
+
+/**
+ * Generate a soft light pastel background for a given primary hex color
+ */
+export function hexToBg(hex) {
+    if (!hex || typeof hex !== 'string') return '#f1f5f9';
+    let clean = hex.replace('#', '');
+    if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+    const r = parseInt(clean.substring(0, 2), 16) || 0;
+    const g = parseInt(clean.substring(2, 4), 16) || 0;
+    const b = parseInt(clean.substring(4, 6), 16) || 0;
+    // Mix 85% white + 15% color for soft tint
+    const mr = Math.round(r * 0.18 + 255 * 0.82);
+    const mg = Math.round(g * 0.18 + 255 * 0.82);
+    const mb = Math.round(b * 0.18 + 255 * 0.82);
+    return `#${((1 << 24) + (mr << 16) + (mg << 8) + mb).toString(16).slice(1)}`;
+}
+
+/**
+ * Decide whether white or dark text is more readable on a given hex color
+ */
+export function getContrastTextColor(hex) {
+    if (!hex) return '#ffffff';
+    let clean = hex.replace('#', '');
+    if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+    const r = parseInt(clean.substring(0, 2), 16) || 0;
+    const g = parseInt(clean.substring(2, 4), 16) || 0;
+    const b = parseInt(clean.substring(4, 6), 16) || 0;
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.65 ? '#0f172a' : '#ffffff';
+}
+
+export function updateWorkstream(code, { name, color, bg } = {}) {
+    const safe = (code || '').toUpperCase().trim();
+    if (!safe) return;
+    const current = WORKSTREAMS[safe] || { name: safe, color: '#6366f1', bg: '#e0e7ff' };
+    const nextColor = color || current.color;
+    const nextBg = bg || (color ? hexToBg(color) : current.bg);
+    WORKSTREAMS[safe] = {
+        name: name !== undefined ? name : current.name,
+        color: nextColor,
+        bg: nextBg
+    };
+    return WORKSTREAMS[safe];
+}
+
+export function resetWorkstreams() {
+    Object.keys(WORKSTREAMS).forEach(k => delete WORKSTREAMS[k]);
+    Object.assign(WORKSTREAMS, JSON.parse(JSON.stringify(DEFAULT_WORKSTREAMS)));
+}
+
+export function exportWorkstreams() {
+    return JSON.parse(JSON.stringify(WORKSTREAMS));
+}
+
+export function importWorkstreams(data) {
+    if (!data || typeof data !== 'object') return;
+    Object.keys(data).forEach(code => {
+        const item = data[code];
+        if (item && item.color) {
+            WORKSTREAMS[code] = {
+                name: item.name || code,
+                color: item.color,
+                bg: item.bg || hexToBg(item.color)
+            };
+        }
+    });
+}
 
 // Built-in Project Stages
 export const HARDWARE_STAGES = ['Concept', 'EVT', 'DVT', 'PVT', 'MP'];
@@ -139,10 +210,15 @@ export const STATUS_PILLS = {
     'Complete': { label: 'Complete', class: 'bg-emerald-100 text-emerald-700 border-emerald-300' }
 };
 
-export function registerCustomWorkstream(code, name, color = '#6366f1', bg = '#e0e7ff') {
+export function registerCustomWorkstream(code, name, color = '#6366f1', bg = null) {
     const safeCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!safeCode) return 'HW';
     if (!WORKSTREAMS[safeCode]) {
-        WORKSTREAMS[safeCode] = { name: name || safeCode, color, bg };
+        WORKSTREAMS[safeCode] = {
+            name: name || safeCode,
+            color,
+            bg: bg || hexToBg(color)
+        };
     }
     return safeCode;
 }

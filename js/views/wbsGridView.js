@@ -233,7 +233,15 @@ export class WbsGridView {
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-1 border-r border-slate-200">
-                            <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center"' : 'class="w-full border border-slate-200 rounded py-0.5 text-[11px] text-center focus:outline-none"'}>
+                            <div class="relative flex items-center">
+                                <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 text-[11px] text-center font-mono"' : 'class="w-full border border-slate-200 rounded py-0.5 pr-6 text-[11px] text-center focus:outline-none focus:border-indigo-500 font-mono"'}>
+                                ${!t.isSummary ? `
+                                    <button type="button" data-action="pick-calendar" data-id="${t.id}" title="Click to open calendar pop-up" class="absolute right-1 text-slate-400 hover:text-indigo-600 transition p-0.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                    </button>
+                                    <input type="date" data-picker-for="${t.id}" value="${t.start || ''}" class="sr-only" tabindex="-1">
+                                ` : ''}
+                            </div>
                         </td>
                     ` : ''}
 
@@ -389,6 +397,37 @@ export class WbsGridView {
                     this.onTaskChange(id, field, value);
                 }
             });
+        });
+
+        // Calendar pop-up dialog button handlers
+        this.container.querySelectorAll('[data-action="pick-calendar"]').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const id = btn.getAttribute('data-id');
+                const picker = this.container.querySelector(`input[data-picker-for="${id}"]`);
+                if (picker) {
+                    if (typeof picker.showPicker === 'function') {
+                        picker.showPicker();
+                    } else {
+                        picker.focus();
+                        picker.click();
+                    }
+                }
+            };
+        });
+
+        this.container.querySelectorAll('input[data-picker-for]').forEach(picker => {
+            picker.onchange = (e) => {
+                const id = picker.getAttribute('data-picker-for');
+                const iso = e.target.value;
+                if (iso) {
+                    const textInput = this.container.querySelector(`input[data-field="start"][data-id="${id}"]`);
+                    if (textInput) textInput.value = CalendarEngine.formatDate(iso);
+                    if (this.onTaskChange) {
+                        this.onTaskChange(id, 'start', iso);
+                    }
+                }
+            };
         });
 
         // Toolbar buttons
