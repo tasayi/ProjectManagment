@@ -272,7 +272,7 @@ export class WbsGridView {
             const assignments = t.getAssignedResources();
 
             return `
-                <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
+                <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'is-active font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
                     <!-- WBS -->
                     <td class="py-1.5 px-2 text-center text-slate-500 text-[11px] font-mono border-r border-slate-200">
                         <span class="wbs-drag-handle cursor-grab text-slate-400 hover:text-slate-700 mr-0.5" draggable="true" data-id="${t.id}" title="Drag to move task">&#8942;&#8942;</span>${t.wbs}
@@ -671,8 +671,8 @@ export class WbsGridView {
         const currentMap = new Map(currentAssignments.map(a => [a.name, a.units || 100]));
 
         const html = `
-            <div id="assignment-modal-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
+            <div id="assignment-modal-backdrop" class="modal-backdrop-animate fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                <div class="modal-card-animate bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
                     <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div class="font-bold text-xs flex items-center gap-1.5">
                             <span>👥 Resource Assignment & Fractional Units</span>
@@ -720,7 +720,22 @@ export class WbsGridView {
 
         popoverContainer.innerHTML = html;
 
-        const closeModal = () => { popoverContainer.innerHTML = ''; };
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') closeModal();
+        };
+        window.addEventListener('keydown', onKeyDown);
+
+        const closeModal = () => {
+            window.removeEventListener('keydown', onKeyDown);
+            popoverContainer.innerHTML = '';
+        };
+
+        const backdrop = popoverContainer.querySelector('#assignment-modal-backdrop');
+        if (backdrop) {
+            backdrop.onclick = (e) => {
+                if (e.target === backdrop) closeModal();
+            };
+        }
 
         popoverContainer.querySelector('#assign-modal-close').onclick = closeModal;
         popoverContainer.querySelector('#assign-modal-cancel').onclick = closeModal;
@@ -750,9 +765,9 @@ export class WbsGridView {
         this.selectedTaskId = taskId;
         this.container.querySelectorAll('.wbs-row').forEach(r => {
             if (r.getAttribute('data-id') === taskId) {
-                r.classList.add('bg-indigo-50', 'border-l-4', 'border-indigo-600', 'font-medium');
+                r.classList.add('is-active', 'font-medium');
             } else {
-                r.classList.remove('bg-indigo-50', 'border-l-4', 'border-indigo-600', 'font-medium');
+                r.classList.remove('is-active', 'font-medium');
             }
         });
 

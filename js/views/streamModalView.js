@@ -14,10 +14,18 @@ export class StreamModalView {
     open() {
         this.isOpen = true;
         this.render();
+        this._escHandler = (e) => {
+            if (e.key === 'Escape') this.close();
+        };
+        window.addEventListener('keydown', this._escHandler);
     }
 
     close() {
         this.isOpen = false;
+        if (this._escHandler) {
+            window.removeEventListener('keydown', this._escHandler);
+            this._escHandler = null;
+        }
         if (this.container) this.container.innerHTML = '';
     }
 
@@ -27,8 +35,8 @@ export class StreamModalView {
         const streamEntries = Object.entries(WORKSTREAMS);
 
         const html = `
-            <div id="stream-modal-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+            <div id="stream-modal-backdrop" class="modal-backdrop-animate fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                <div class="modal-card-animate bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
                     <!-- Header -->
                     <div class="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between flex-shrink-0">
                         <div class="flex items-center gap-2">
@@ -133,6 +141,13 @@ export class StreamModalView {
         // Close handlers
         const closeBtn = this.container.querySelector('#stream-modal-close');
         if (closeBtn) closeBtn.onclick = () => this.close();
+
+        const backdrop = this.container.querySelector('#stream-modal-backdrop');
+        if (backdrop) {
+            backdrop.onclick = (e) => {
+                if (e.target === backdrop) this.close();
+            };
+        }
 
         const applyBtn = this.container.querySelector('#stream-modal-apply');
         if (applyBtn) {

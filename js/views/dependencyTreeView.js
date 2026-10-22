@@ -105,7 +105,7 @@ export class DependencyTreeView {
         const predBadges = preds.map(p => `${p.targetTask.wbs}${p.type}${p.lag ? (p.lag > 0 ? '+' + p.lag + 'd' : p.lag + 'd') : ''}`).join(', ');
 
         return `
-            <div data-node-id="${task.id}" class="task-node-card bg-white p-3 rounded-lg border-2 ${isCritical ? 'border-red-500 ring-2 ring-red-200 shadow-md' : 'border-slate-200 shadow-sm'} hover:shadow-lg transition-all space-y-2 relative">
+            <div data-node-id="${task.id}" class="task-node-card bg-white p-3 rounded-lg border-2 ${isCritical ? 'border-red-500 ring-2 ring-red-200 shadow-md' : 'border-slate-200 shadow-sm'} hover:shadow-md hover:-translate-y-0.5 transition duration-150 space-y-2 relative">
                 
                 <!-- Card Header -->
                 <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-1.5">

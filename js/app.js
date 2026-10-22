@@ -396,9 +396,15 @@ class ProjectManagementApp {
                 { btn: btnInfo, name: 'info' }
             ].forEach(item => {
                 if (item.btn) {
-                    item.btn.className = item.name === active
-                        ? 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm'
-                        : 'px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs';
+                    if (item.name === 'info') {
+                        item.btn.className = item.name === active
+                            ? 'px-3 py-1 bg-amber-500/20 text-amber-200 border border-amber-500/40 rounded-md font-semibold text-xs shadow-xs transition'
+                            : 'px-3 py-1 text-amber-300 hover:text-amber-200 hover:bg-slate-700/60 rounded-md font-medium text-xs transition';
+                    } else {
+                        item.btn.className = item.name === active
+                            ? 'px-3 py-1 bg-indigo-600 text-white rounded-md font-semibold text-xs shadow-sm transition'
+                            : 'px-3 py-1 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-md font-medium text-xs transition';
+                    }
                 }
             });
             this.renderAllViews();

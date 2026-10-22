@@ -155,17 +155,18 @@ export class ResourceView {
 
         return `
             <table class="w-full text-left text-xs border-collapse">
-                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0 z-10">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0 z-20">
                     <tr>
-                        <th class="p-2 border-r border-slate-200 min-w-[120px] bg-slate-100 sticky left-0 z-20">Engineer</th>
+                        <th class="p-2 border-r border-slate-200 min-w-[140px] bg-slate-100 sticky left-0 top-0 z-30 shadow-xs">Engineer</th>
                         ${dates.map(d => {
                             const dateObj = new Date(d + 'T00:00:00Z');
                             const dayNum = dateObj.getUTCDate();
                             const monthShort = dateObj.toLocaleString('default', { month: 'short', timeZone: 'UTC' });
                             const isToday = d === todayIso;
                             return `
-                                <th class="p-1 text-center border-r border-slate-200 min-w-[36px] text-[10px] ${isToday ? 'bg-indigo-100 text-indigo-900 font-bold border-b-2 border-indigo-600' : ''}" data-is-today="${isToday}" data-date="${d}">
-                                    ${monthShort}<br>${dayNum}
+                                <th class="p-1 text-center border-r border-slate-200 min-w-[38px] text-[10px] ${isToday ? 'bg-indigo-100 text-indigo-900 font-bold border-b-2 border-indigo-600 shadow-xs' : 'bg-slate-50'}" data-is-today="${isToday}" data-date="${d}">
+                                    <span class="text-[9px] uppercase tracking-wider text-slate-400 font-medium">${monthShort}</span><br>
+                                    <span class="font-bold text-slate-700">${dayNum}</span>
                                 </th>
                             `;
                         }).join('')}
@@ -173,9 +174,12 @@ export class ResourceView {
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     ${resources.map(res => `
-                        <tr>
-                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-slate-50/90 sticky left-0 z-10">
-                                ${this.escapeHtml(res.name)}
+                        <tr class="hover:bg-slate-50/70 transition-colors">
+                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-white sticky left-0 z-10 shadow-xs">
+                                <div class="flex items-center justify-between gap-1.5">
+                                    <span class="truncate text-xs">${this.escapeHtml(res.name)}</span>
+                                    <span class="text-[9px] font-normal text-slate-500 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded">${this.escapeHtml(res.discipline || 'HW')}</span>
+                                </div>
                             </td>
                             ${dates.map(d => {
                                 const key = `${res.id}_${d}`;
@@ -183,10 +187,12 @@ export class ResourceView {
                                 const isToday = d === todayIso;
 
                                 let bgClass = 'bg-white text-slate-300';
-                                if (load > 0 && load <= 100) {
+                                if (load > 0 && load <= 80) {
+                                    bgClass = 'bg-sky-50 text-sky-800 font-medium';
+                                } else if (load > 80 && load <= 100) {
                                     bgClass = 'bg-emerald-100 text-emerald-800 font-bold';
                                 } else if (load > 100) {
-                                    bgClass = 'bg-red-500 text-white font-extrabold shadow-inner';
+                                    bgClass = 'bg-rose-500 text-white font-extrabold shadow-inner';
                                 }
 
                                 return `

@@ -77,6 +77,90 @@ body {
     background-color: #6366f1;
 }
 
+/* Modal Animations */
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalScaleUp {
+    from { transform: scale(0.96) translateY(4px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.modal-backdrop-animate {
+    animation: modalFadeIn 0.15s ease-out forwards;
+}
+
+.modal-card-animate {
+    animation: modalScaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* WBS Row Active & Hover styling */
+.wbs-row {
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.wbs-row.is-active {
+    background-color: #eef2ff !important;
+    border-left: 3px solid #6366f1 !important;
+}
+
+/* Critical Path Glow */
+.is-critical-bar {
+    outline: 2px solid #ef4444;
+    outline-offset: 1px;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* SVG Dependency Line polish */
+.gantt-dep-line {
+    transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+.gantt-dep-line:hover {
+    stroke-width: 2.5;
+    stroke: #4f46e5 !important;
+}
+
+.gantt-dep-line.critical {
+    stroke: #dc2626 !important;
+    stroke-width: 2;
+}
+
+/* Milestone Diamond hover transition */
+.milestone-diamond {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.milestone-diamond:hover {
+    transform: rotate(45deg) scale(1.15);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Sticky Resource Heatmap styling */
+.sticky-res-col {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background-color: #ffffff;
+}
+
+.sticky-res-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: #f8fafc;
+}
+
+.sticky-res-corner {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    background-color: #f1f5f9;
+}
+
 /* PRINT: only the off-screen #print-root (full table / full Gantt) is printed */
 #print-root {
     display: none;
@@ -117,97 +201,96 @@ body {
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden">
 
     <!-- App Top Navigation Header -->
-    <header class="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between shadow-md flex-wrap gap-2 z-30">
+    <header class="bg-slate-900 text-white px-4 py-2 flex items-center justify-between shadow-md flex-wrap gap-2.5 z-30 border-b border-slate-800">
         <!-- Brand & Editable Project Title -->
-        <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 bg-indigo-600 px-2.5 py-1 rounded-md text-white font-bold text-sm shadow">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
-                <span>Project Management</span>
+        <div class="flex items-center gap-2.5">
+            <div class="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 px-3 py-1 rounded-lg text-white font-bold text-xs tracking-wide shadow-sm">
+                <svg class="w-4 h-4 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                <span>PMTool</span>
             </div>
-            <input type="text" id="project-title-input" value="Project Management Schedule" class="bg-slate-800 hover:bg-slate-700/80 focus:bg-slate-800 border border-slate-700 focus:border-indigo-500 text-white text-xs font-semibold px-2.5 py-1 rounded focus:outline-none w-52 md:w-60 transition" title="Click to rename project">
+            <input type="text" id="project-title-input" value="Project Management Schedule" class="bg-slate-800/90 hover:bg-slate-800 focus:bg-slate-800 border border-slate-700/80 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 text-slate-100 text-xs font-semibold px-2.5 py-1 rounded-md focus:outline-none w-52 md:w-64 transition shadow-xs" title="Click to rename project">
         </div>
 
         <!-- Center View Switcher & Baseline KPI Summary -->
-        <div class="flex items-center gap-3">
-            <!-- View Switcher -->
-            <div class="bg-slate-800 p-1 rounded-md flex items-center gap-1 border border-slate-700 text-xs">
-                <button id="view-btn-split" class="px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm">Grid & Gantt</button>
-                <button id="view-btn-resources" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Engineer Workload</button>
-                <button id="view-btn-deptree" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Dependency Tree</button>
-                <button id="view-btn-milestones" class="px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs">Milestones</button>
-                <button id="view-btn-info" class="px-3 py-1 bg-slate-800 text-amber-300 hover:bg-slate-700 rounded font-medium text-xs flex items-center gap-1">
-                    <span>❓ Info & Guide</span>
+        <div class="flex items-center gap-2.5">
+            <!-- View Switcher Segmented Control -->
+            <div class="bg-slate-800/90 p-0.5 rounded-lg flex items-center gap-0.5 border border-slate-700/80 text-xs shadow-inner">
+                <button id="view-btn-split" class="px-3 py-1 bg-indigo-600 text-white rounded-md font-medium text-xs shadow-sm transition">Grid & Gantt</button>
+                <button id="view-btn-resources" class="px-3 py-1 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-md font-medium text-xs transition">Engineer Workload</button>
+                <button id="view-btn-deptree" class="px-3 py-1 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-md font-medium text-xs transition">Dependency Tree</button>
+                <button id="view-btn-milestones" class="px-3 py-1 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-md font-medium text-xs transition">Milestones</button>
+                <button id="view-btn-info" class="px-3 py-1 text-amber-300 hover:text-amber-200 hover:bg-slate-700/60 rounded-md font-medium text-xs flex items-center gap-1 transition">
+                    <span>❓ Guide</span>
                 </button>
             </div>
 
             <!-- Baseline KPI Status Badge -->
-            <div id="header-baseline-kpi" class="hidden xl:block px-2.5 py-1 bg-slate-800 text-slate-400 rounded text-xs border border-slate-700 font-mono">
+            <div id="header-baseline-kpi" class="hidden 2xl:block px-2.5 py-1 bg-slate-800/90 text-slate-400 rounded-md text-xs border border-slate-700/80 font-mono">
                 Baseline: Not Set
             </div>
         </div>
 
-        <!-- Right Toolbar Actions: Calendar Config, Baseline, File Save, Export, Print -->
+        <!-- Right Action Toolbars: Config, Storage, Output -->
         <div class="flex items-center gap-2">
-            <!-- Calendar Config Button -->
-            <button id="btn-calendar-config" class="px-2.5 py-1 bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-700 text-indigo-200 rounded font-medium text-xs flex items-center gap-1.5 transition shadow-sm" title="Configure Working Days, Festive Holidays & Overtime Days">
-                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                <span>Calendar</span>
-            </button>
+            <!-- Cluster 1: Configuration & Baselines -->
+            <div class="flex items-center gap-1 bg-slate-800/70 p-0.5 rounded-lg border border-slate-700/70">
+                <button id="btn-calendar-config" class="px-2.5 py-1 text-indigo-300 hover:text-white hover:bg-indigo-900/60 rounded-md font-medium text-xs flex items-center gap-1.5 transition" title="Configure Working Days, Festive Holidays & Overtime Days">
+                    <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <span>Calendar</span>
+                </button>
 
-            <!-- Workstream Colors & Palette Modal Trigger -->
-            <button id="btn-streams" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1.5 transition shadow-sm" title="Customize Workstream Colors and Names">
-                <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm10 10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4z"/></svg>
-                <span>🎨 Streams</span>
-            </button>
+                <button id="btn-streams" class="px-2.5 py-1 text-pink-300 hover:text-white hover:bg-pink-900/40 rounded-md font-medium text-xs flex items-center gap-1.5 transition" title="Customize Workstream Colors and Names">
+                    <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4H7zm10 10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4zm0-10a4 4 0 01-4-4 4 4 0 014-4h4a4 4 0 014 4v4h-4z"/></svg>
+                    <span>Streams</span>
+                </button>
 
-            <!-- Active Baseline Selector -->
-            <select id="baseline-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none max-w-[150px]" title="Baseline used for variance comparison"></select>
+                <select id="baseline-select" class="bg-slate-900/80 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none max-w-[130px]" title="Baseline used for variance comparison"></select>
 
-            <!-- Set Baseline -->
-            <button id="btn-set-baseline" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Capture a new baseline (previous baselines are kept)">
-                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                Baseline
-            </button>
+                <button id="btn-set-baseline" class="px-2 py-1 text-amber-300 hover:text-amber-200 hover:bg-slate-700/60 rounded-md font-medium text-xs flex items-center gap-1 transition" title="Capture a new baseline (previous baselines are kept)">
+                    <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span>Baseline</span>
+                </button>
+            </div>
 
-            <!-- Save Project In Place (Ctrl+S) -->
-            <button id="btn-save-prj" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition" title="Save in place (Ctrl+S)">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-                <span>Save</span>
-            </button>
+            <!-- Cluster 2: File Storage (.prj) -->
+            <div class="flex items-center gap-1 bg-slate-800/70 p-0.5 rounded-lg border border-slate-700/70">
+                <button id="btn-save-prj" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-semibold text-xs flex items-center gap-1 shadow-sm transition" title="Save in place (Ctrl+S)">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                    <span>Save</span>
+                </button>
 
-            <!-- Save As New File -->
-            <button id="btn-save-as-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Save copy to a new file...">
-                <span>Save As...</span>
-            </button>
+                <button id="btn-save-as-prj" class="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-md font-medium text-xs transition" title="Save copy to a new file...">
+                    <span>Save As...</span>
+                </button>
 
-            <!-- Import / Open .prj -->
-            <button id="btn-import-prj" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded font-medium text-xs flex items-center gap-1 transition" title="Open project file (.prj)">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                <span>Open</span>
-            </button>
-            <input type="file" id="prj-file-input" accept=".prj,.json" class="hidden">
+                <button id="btn-import-prj" class="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-md font-medium text-xs flex items-center gap-1 transition" title="Open project file (.prj)">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    <span>Open</span>
+                </button>
+                <input type="file" id="prj-file-input" accept=".prj,.json" class="hidden">
+            </div>
 
-            <!-- Export Excel -->
-            <button id="btn-export-excel" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-medium text-xs flex items-center gap-1 shadow transition" title="Export to Excel (.xlsx) for backward compatibility">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Excel
-            </button>
+            <!-- Cluster 3: Output & Presets -->
+            <div class="flex items-center gap-1">
+                <button id="btn-export-excel" class="px-2 py-1 bg-emerald-700/90 hover:bg-emerald-700 text-white rounded-md font-medium text-xs flex items-center gap-1 shadow-xs transition" title="Export to Excel (.xlsx) for backward compatibility">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>Excel</span>
+                </button>
 
-            <!-- Presets Dropdown with New Project option -->
-            <select id="preset-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" title="Create a new blank project or load a sample preset">
-                <option value="">New / Presets...</option>
-                <option value="new_blank">➕ Create New Blank Project</option>
-                <option value="iot_device">📁 Preset: IoT Tracker Schedule</option>
-            </select>
+                <select id="preset-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-md px-2 py-1 focus:outline-none" title="Create a new blank project or load a sample preset">
+                    <option value="">Presets...</option>
+                    <option value="new_blank">➕ Blank Project</option>
+                    <option value="iot_device">📁 IoT Tracker Schedule</option>
+                </select>
 
-            <!-- Print / PDF Select -->
-            <select id="print-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none" title="Print or Save PDF of individual views">
-                <option value="">Print / PDF...</option>
-                <option value="all">Print Full Screen</option>
-                <option value="gantt">Print Gantt Timeline ONLY</option>
-                <option value="wbs">Print Activity List ONLY</option>
-                <option value="milestones">Print Milestones Roadmap ONLY</option>
-            </select>
+                <select id="print-select" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-md px-2 py-1 focus:outline-none" title="Print or Save PDF of individual views">
+                    <option value="">Print / PDF...</option>
+                    <option value="all">Full Screen</option>
+                    <option value="gantt">Gantt Only</option>
+                    <option value="wbs">Activity List Only</option>
+                    <option value="milestones">Milestones Only</option>
+                </select>
+            </div>
         </div>
     </header>
 
@@ -1448,7 +1531,7 @@ class WbsGridView {
             const assignments = t.getAssignedResources();
 
             return `
-                <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-indigo-600 font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
+                <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'is-active font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
                     <!-- WBS -->
                     <td class="py-1.5 px-2 text-center text-slate-500 text-[11px] font-mono border-r border-slate-200">
                         <span class="wbs-drag-handle cursor-grab text-slate-400 hover:text-slate-700 mr-0.5" draggable="true" data-id="${t.id}" title="Drag to move task">&#8942;&#8942;</span>${t.wbs}
@@ -1847,8 +1930,8 @@ class WbsGridView {
         const currentMap = new Map(currentAssignments.map(a => [a.name, a.units || 100]));
 
         const html = `
-            <div id="assignment-modal-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
+            <div id="assignment-modal-backdrop" class="modal-backdrop-animate fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                <div class="modal-card-animate bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
                     <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
                         <div class="font-bold text-xs flex items-center gap-1.5">
                             <span>👥 Resource Assignment & Fractional Units</span>
@@ -1896,7 +1979,22 @@ class WbsGridView {
 
         popoverContainer.innerHTML = html;
 
-        const closeModal = () => { popoverContainer.innerHTML = ''; };
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') closeModal();
+        };
+        window.addEventListener('keydown', onKeyDown);
+
+        const closeModal = () => {
+            window.removeEventListener('keydown', onKeyDown);
+            popoverContainer.innerHTML = '';
+        };
+
+        const backdrop = popoverContainer.querySelector('#assignment-modal-backdrop');
+        if (backdrop) {
+            backdrop.onclick = (e) => {
+                if (e.target === backdrop) closeModal();
+            };
+        }
 
         popoverContainer.querySelector('#assign-modal-close').onclick = closeModal;
         popoverContainer.querySelector('#assign-modal-cancel').onclick = closeModal;
@@ -1926,9 +2024,9 @@ class WbsGridView {
         this.selectedTaskId = taskId;
         this.container.querySelectorAll('.wbs-row').forEach(r => {
             if (r.getAttribute('data-id') === taskId) {
-                r.classList.add('bg-indigo-50', 'border-l-4', 'border-indigo-600', 'font-medium');
+                r.classList.add('is-active', 'font-medium');
             } else {
-                r.classList.remove('bg-indigo-50', 'border-l-4', 'border-indigo-600', 'font-medium');
+                r.classList.remove('is-active', 'font-medium');
             }
         });
 
@@ -2053,6 +2151,9 @@ class GanttView {
                         <div class="gantt-body relative" style="height: ${visibleTasks.length * this.rowHeight}px;">
                             <!-- Grid Background Lines with Calendar Shading -->
                             ${this.renderGridLines(timelineWidth, visibleTasks.length)}
+
+                            <!-- Today Vertical Marker Line -->
+                            ${this.renderTodayMarker(timelineWidth)}
 
                             <!-- Predecessor Connector Lines SVG -->
                             <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
@@ -2217,6 +2318,21 @@ class GanttView {
         `;
     }
 
+    renderTodayMarker(timelineWidth) {
+        const todayIso = new Date().toISOString().split('T')[0];
+        if (todayIso >= this.startDate && todayIso <= this.endDate) {
+            const todayX = this.dateToPixel(todayIso);
+            if (todayX >= 0 && todayX <= timelineWidth) {
+                return `
+                    <div style="left: ${todayX + this.dayWidth / 2}px;" class="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-25 pointer-events-none" title="Today (${todayIso})">
+                        <div class="sticky top-0 -ml-3.5 px-1 py-0.5 bg-rose-600 text-white text-[9px] font-bold rounded-b shadow-xs uppercase tracking-wider text-center">Today</div>
+                    </div>
+                `;
+            }
+        }
+        return '';
+    }
+
     dateToPixel(dateStr) {
         if (!dateStr || !this.startDate) return 0;
         const diffDays = Math.round((new Date(dateStr + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
@@ -2271,7 +2387,7 @@ class GanttView {
             return `
                 ${baselineGhostHtml}
                 <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${CalendarEngine.formatDate(task.start)})">
-                    <div class="w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm group-hover:scale-115 transition-transform"></div>
+                    <div class="milestone-diamond w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm transition-transform"></div>
                     <span class="absolute left-5 top-0 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
                         ◆ ${this.escapeHtml(task.name)}
                     </span>
@@ -2297,7 +2413,7 @@ class GanttView {
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
+            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 is-critical-bar' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
@@ -2353,7 +2469,7 @@ class GanttView {
                 }
 
                 paths.push(`
-                    <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
+                    <path class="gantt-dep-line ${isCritical ? 'critical' : ''}" d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
                 `);
             });
         });
@@ -2769,17 +2885,18 @@ class ResourceView {
 
         return `
             <table class="w-full text-left text-xs border-collapse">
-                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0 z-10">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0 z-20">
                     <tr>
-                        <th class="p-2 border-r border-slate-200 min-w-[120px] bg-slate-100 sticky left-0 z-20">Engineer</th>
+                        <th class="p-2 border-r border-slate-200 min-w-[140px] bg-slate-100 sticky left-0 top-0 z-30 shadow-xs">Engineer</th>
                         ${dates.map(d => {
                             const dateObj = new Date(d + 'T00:00:00Z');
                             const dayNum = dateObj.getUTCDate();
                             const monthShort = dateObj.toLocaleString('default', { month: 'short', timeZone: 'UTC' });
                             const isToday = d === todayIso;
                             return `
-                                <th class="p-1 text-center border-r border-slate-200 min-w-[36px] text-[10px] ${isToday ? 'bg-indigo-100 text-indigo-900 font-bold border-b-2 border-indigo-600' : ''}" data-is-today="${isToday}" data-date="${d}">
-                                    ${monthShort}<br>${dayNum}
+                                <th class="p-1 text-center border-r border-slate-200 min-w-[38px] text-[10px] ${isToday ? 'bg-indigo-100 text-indigo-900 font-bold border-b-2 border-indigo-600 shadow-xs' : 'bg-slate-50'}" data-is-today="${isToday}" data-date="${d}">
+                                    <span class="text-[9px] uppercase tracking-wider text-slate-400 font-medium">${monthShort}</span><br>
+                                    <span class="font-bold text-slate-700">${dayNum}</span>
                                 </th>
                             `;
                         }).join('')}
@@ -2787,9 +2904,12 @@ class ResourceView {
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     ${resources.map(res => `
-                        <tr>
-                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-slate-50/90 sticky left-0 z-10">
-                                ${this.escapeHtml(res.name)}
+                        <tr class="hover:bg-slate-50/70 transition-colors">
+                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-white sticky left-0 z-10 shadow-xs">
+                                <div class="flex items-center justify-between gap-1.5">
+                                    <span class="truncate text-xs">${this.escapeHtml(res.name)}</span>
+                                    <span class="text-[9px] font-normal text-slate-500 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded">${this.escapeHtml(res.discipline || 'HW')}</span>
+                                </div>
                             </td>
                             ${dates.map(d => {
                                 const key = `${res.id}_${d}`;
@@ -2797,10 +2917,12 @@ class ResourceView {
                                 const isToday = d === todayIso;
 
                                 let bgClass = 'bg-white text-slate-300';
-                                if (load > 0 && load <= 100) {
+                                if (load > 0 && load <= 80) {
+                                    bgClass = 'bg-sky-50 text-sky-800 font-medium';
+                                } else if (load > 80 && load <= 100) {
                                     bgClass = 'bg-emerald-100 text-emerald-800 font-bold';
                                 } else if (load > 100) {
-                                    bgClass = 'bg-red-500 text-white font-extrabold shadow-inner';
+                                    bgClass = 'bg-rose-500 text-white font-extrabold shadow-inner';
                                 }
 
                                 return `
@@ -2884,8 +3006,8 @@ class CalendarModalView {
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
         const html = `
-            <div id="calendar-modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
+            <div id="calendar-modal-backdrop" class="modal-backdrop-animate fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div class="modal-card-animate bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
                     
                     <!-- Modal Header -->
                     <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
@@ -3032,7 +3154,13 @@ class CalendarModalView {
         const saveBtn = this.container.querySelector('#modal-save-btn');
         const backdrop = this.container.querySelector('#calendar-modal-backdrop');
 
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') closeModal();
+        };
+        window.addEventListener('keydown', onKeyDown);
+
         const closeModal = () => {
+            window.removeEventListener('keydown', onKeyDown);
             this.container.innerHTML = '';
         };
 
@@ -3142,10 +3270,18 @@ class StreamModalView {
     open() {
         this.isOpen = true;
         this.render();
+        this._escHandler = (e) => {
+            if (e.key === 'Escape') this.close();
+        };
+        window.addEventListener('keydown', this._escHandler);
     }
 
     close() {
         this.isOpen = false;
+        if (this._escHandler) {
+            window.removeEventListener('keydown', this._escHandler);
+            this._escHandler = null;
+        }
         if (this.container) this.container.innerHTML = '';
     }
 
@@ -3155,8 +3291,8 @@ class StreamModalView {
         const streamEntries = Object.entries(WORKSTREAMS);
 
         const html = `
-            <div id="stream-modal-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+            <div id="stream-modal-backdrop" class="modal-backdrop-animate fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                <div class="modal-card-animate bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
                     <!-- Header -->
                     <div class="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between flex-shrink-0">
                         <div class="flex items-center gap-2">
@@ -3261,6 +3397,13 @@ class StreamModalView {
         // Close handlers
         const closeBtn = this.container.querySelector('#stream-modal-close');
         if (closeBtn) closeBtn.onclick = () => this.close();
+
+        const backdrop = this.container.querySelector('#stream-modal-backdrop');
+        if (backdrop) {
+            backdrop.onclick = (e) => {
+                if (e.target === backdrop) this.close();
+            };
+        }
 
         const applyBtn = this.container.querySelector('#stream-modal-apply');
         if (applyBtn) {
@@ -3459,7 +3602,7 @@ class DependencyTreeView {
         const predBadges = preds.map(p => `${p.targetTask.wbs}${p.type}${p.lag ? (p.lag > 0 ? '+' + p.lag + 'd' : p.lag + 'd') : ''}`).join(', ');
 
         return `
-            <div data-node-id="${task.id}" class="task-node-card bg-white p-3 rounded-lg border-2 ${isCritical ? 'border-red-500 ring-2 ring-red-200 shadow-md' : 'border-slate-200 shadow-sm'} hover:shadow-lg transition-all space-y-2 relative">
+            <div data-node-id="${task.id}" class="task-node-card bg-white p-3 rounded-lg border-2 ${isCritical ? 'border-red-500 ring-2 ring-red-200 shadow-md' : 'border-slate-200 shadow-sm'} hover:shadow-md hover:-translate-y-0.5 transition duration-150 space-y-2 relative">
                 
                 <!-- Card Header -->
                 <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-1.5">
@@ -4684,9 +4827,15 @@ class ProjectManagementApp {
                 { btn: btnInfo, name: 'info' }
             ].forEach(item => {
                 if (item.btn) {
-                    item.btn.className = item.name === active
-                        ? 'px-3 py-1 bg-indigo-600 text-white rounded font-medium text-xs shadow-sm'
-                        : 'px-3 py-1 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded font-medium text-xs';
+                    if (item.name === 'info') {
+                        item.btn.className = item.name === active
+                            ? 'px-3 py-1 bg-amber-500/20 text-amber-200 border border-amber-500/40 rounded-md font-semibold text-xs shadow-xs transition'
+                            : 'px-3 py-1 text-amber-300 hover:text-amber-200 hover:bg-slate-700/60 rounded-md font-medium text-xs transition';
+                    } else {
+                        item.btn.className = item.name === active
+                            ? 'px-3 py-1 bg-indigo-600 text-white rounded-md font-semibold text-xs shadow-sm transition'
+                            : 'px-3 py-1 text-slate-300 hover:text-white hover:bg-slate-700/60 rounded-md font-medium text-xs transition';
+                    }
                 }
             });
             this.renderAllViews();

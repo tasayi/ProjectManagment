@@ -18,8 +18,8 @@ export class CalendarModalView {
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
         const html = `
-            <div id="calendar-modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-                <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
+            <div id="calendar-modal-backdrop" class="modal-backdrop-animate fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div class="modal-card-animate bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
                     
                     <!-- Modal Header -->
                     <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
@@ -166,7 +166,13 @@ export class CalendarModalView {
         const saveBtn = this.container.querySelector('#modal-save-btn');
         const backdrop = this.container.querySelector('#calendar-modal-backdrop');
 
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') closeModal();
+        };
+        window.addEventListener('keydown', onKeyDown);
+
         const closeModal = () => {
+            window.removeEventListener('keydown', onKeyDown);
             this.container.innerHTML = '';
         };
 

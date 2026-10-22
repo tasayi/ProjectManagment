@@ -81,6 +81,9 @@ export class GanttView {
                             <!-- Grid Background Lines with Calendar Shading -->
                             ${this.renderGridLines(timelineWidth, visibleTasks.length)}
 
+                            <!-- Today Vertical Marker Line -->
+                            ${this.renderTodayMarker(timelineWidth)}
+
                             <!-- Predecessor Connector Lines SVG -->
                             <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
                                 ${this.renderDependencies(visibleTasks)}
@@ -244,6 +247,21 @@ export class GanttView {
         `;
     }
 
+    renderTodayMarker(timelineWidth) {
+        const todayIso = new Date().toISOString().split('T')[0];
+        if (todayIso >= this.startDate && todayIso <= this.endDate) {
+            const todayX = this.dateToPixel(todayIso);
+            if (todayX >= 0 && todayX <= timelineWidth) {
+                return `
+                    <div style="left: ${todayX + this.dayWidth / 2}px;" class="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-25 pointer-events-none" title="Today (${todayIso})">
+                        <div class="sticky top-0 -ml-3.5 px-1 py-0.5 bg-rose-600 text-white text-[9px] font-bold rounded-b shadow-xs uppercase tracking-wider text-center">Today</div>
+                    </div>
+                `;
+            }
+        }
+        return '';
+    }
+
     dateToPixel(dateStr) {
         if (!dateStr || !this.startDate) return 0;
         const diffDays = Math.round((new Date(dateStr + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
@@ -298,7 +316,7 @@ export class GanttView {
             return `
                 ${baselineGhostHtml}
                 <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${CalendarEngine.formatDate(task.start)})">
-                    <div class="w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm group-hover:scale-115 transition-transform"></div>
+                    <div class="milestone-diamond w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm transition-transform"></div>
                     <span class="absolute left-5 top-0 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
                         ◆ ${this.escapeHtml(task.name)}
                     </span>
@@ -324,7 +342,7 @@ export class GanttView {
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
+            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 is-critical-bar' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
@@ -380,7 +398,7 @@ export class GanttView {
                 }
 
                 paths.push(`
-                    <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
+                    <path class="gantt-dep-line ${isCritical ? 'critical' : ''}" d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
                 `);
             });
         });
