@@ -3,6 +3,7 @@
  */
 
 import { BaselineEngine } from '../engine/baselineEngine.js';
+import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class ExcelExporter {
 
@@ -24,8 +25,8 @@ export class ExcelExporter {
             'Assigned Engineers': t.getFormattedAssignments(),
             'Status': t.status,
             'Duration (Days)': t.duration,
-            'Start Date': t.start,
-            'Finish Date': t.finish,
+            'Start Date': CalendarEngine.formatDate(t.start),
+            'Finish Date': CalendarEngine.formatDate(t.finish),
             'Predecessors': t.predecessors || '',
             'Procurement Lead (Days)': t.leadTime || 0,
             'Vendor': t.vendor || '',
@@ -46,8 +47,8 @@ export class ExcelExporter {
                 'Hardware Stage': m.stage,
                 'Workstream': m.workstream,
                 'Assigned Engineer': m.assignedTo || 'Unassigned',
-                'Target Date': m.finish || m.start,
-                'Baseline Date': (m.baseline && m.baseline.finish) || 'N/A',
+                'Target Date': CalendarEngine.formatDate(m.finish || m.start),
+                'Baseline Date': (m.baseline && m.baseline.finish) ? CalendarEngine.formatDate(m.baseline.finish) : 'N/A',
                 'Variance': v.statusText,
                 'Status': m.status
             };
@@ -74,12 +75,36 @@ export class ExcelExporter {
 
         const calendarData = [
             { 'Config Type': 'Standard Weekly Working Days', 'Details': workingDayNames },
-            ... (calendar.holidays || []).map(h => ({ 'Config Type': 'Festive / Company Holiday', 'Details': `${h.date}: ${h.name}` })),
-            ... (calendar.overtimeDays || []).map(o => ({ 'Config Type': 'Overtime Working Day', 'Details': `${o.date}: ${o.note}` }))
+            ... (calendar.holidays || []).map(h => ({ 'Config Type': 'Festive / Company Holiday', 'Details': `${CalendarEngine.formatDate(h.date)}: ${h.name}` })),
+            ... (calendar.overtimeDays || []).map(o => ({ 'Config Type': 'Overtime Working Day', 'Details': `${CalendarEngine.formatDate(o.date)}: ${o.note}` }))
         ];
 
         const wsCal = window.XLSX.utils.json_to_sheet(calendarData);
         window.XLSX.utils.book_append_sheet(wb, wsCal, 'Project Calendar');
+
+        // Sheet 5: Baseline History (every captured baseline vs current schedule)
+        const baselineList = BaselineEngine.getBaselines(tasks);
+        if (baselineList.length > 0) {
+            const historyData = tasks.map(t => {
+                const row = {
+                    'WBS': t.wbs,
+                    'Activity Name': t.name,
+                    'Current Start': CalendarEngine.formatDate(t.start),
+                    'Current Finish': CalendarEngine.formatDate(t.finish),
+                    'Progress (%)': t.progress || 0,
+                    'Status': t.status
+                };
+                baselineList.forEach(b => {
+                    const snap = (t.baselines || []).find(x => x.id === b.id);
+                    row[`${b.label} Start`] = snap ? CalendarEngine.formatDate(snap.start) : '';
+                    row[`${b.label} Finish`] = snap ? CalendarEngine.formatDate(snap.finish) : '';
+                    row[`${b.label} Finish Var (d)`] = snap
+                        ? Math.round((new Date(t.finish) - new Date(snap.finish)) / 86400000) : '';
+                });
+                return row;
+            });
+            window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(historyData), 'Baseline History');
+        }
 
         // Download Excel File
         const fileName = `${(projectTitle || 'Hardware_Project').replace(/[^a-z0-9_-]/gi, '_')}.xlsx`;
@@ -96,8 +121,8 @@ export class ExcelExporter {
             `"${t.assignedTo || ''}"`,
             `"${t.status}"`,
             t.duration,
-            `"${t.start}"`,
-            `"${t.finish}"`,
+            `"${CalendarEngine.formatDate(t.start)}"`,
+            `"${CalendarEngine.formatDate(t.finish)}"`,
             `"${(t.predecessors || '').replace(/"/g, '""')}"`,
             t.leadTime || 0,
             t.progress || 0

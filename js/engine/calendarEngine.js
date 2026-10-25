@@ -23,8 +23,7 @@ export class CalendarEngine {
         }
 
         // 3. Check standard weekly working days (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-        const date = new Date(dateStr);
-        const dayOfWeek = date.getDay();
+        const dayOfWeek = new Date(dateStr + 'T00:00:00Z').getUTCDay();
         const workingDays = calendar.workingDays || [1, 2, 3, 4, 5];
 
         return workingDays.includes(dayOfWeek);
@@ -53,17 +52,62 @@ export class CalendarEngine {
         if (!startDateStr) return '';
         if (days <= 0) return startDateStr;
 
-        let date = new Date(startDateStr);
-        let count = 0;
+        // Task occupies working days only: snap a non-working start forward first
+        return this.shiftWorkingDays(this.nextWorkingDay(startDateStr, calendar), days - 1, calendar);
+    }
 
-        while (count < days - 1) {
-            date.setDate(date.getDate() + 1);
-            const dateStr = date.toISOString().split('T')[0];
-            if (this.isWorkingDay(dateStr, calendar)) {
-                count++;
-            }
+    /** ISO (YYYY-MM-DD) to DD/MM/YYYY */
+    static formatDate(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '');
+    }
+
+    /** DD/MM/YYYY (or ISO) to ISO; returns null when invalid */
+    static parseDate(str) {
+        const s = (str || '').trim();
+        let y, mo, d;
+        let m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(s);
+        if (m) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+        else if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+        else return null;
+        const dt = new Date(Date.UTC(y, mo - 1, d));
+        if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+        return dt.toISOString().split('T')[0];
+    }
+
+    static addCalendarDays(dateStr, n) {
+        const d = new Date(dateStr + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().split('T')[0];
+    }
+
+    /**
+     * First working day on or after dateStr
+     */
+    static nextWorkingDay(dateStr, calendar = new ProjectCalendar()) {
+        if (!dateStr) return dateStr;
+        let cur = dateStr;
+        for (let i = 0; i < 3660; i++) {
+            if (this.isWorkingDay(cur, calendar)) return cur;
+            cur = this.addCalendarDays(cur, 1);
         }
-        return date.toISOString().split('T')[0];
+        return dateStr;
+    }
+
+    /**
+     * Move n working days forward (n > 0) or backward (n < 0) from the nearest working day on/after dateStr
+     */
+    static shiftWorkingDays(dateStr, n, calendar = new ProjectCalendar()) {
+        if (!dateStr) return dateStr;
+        let cur = this.nextWorkingDay(dateStr, calendar);
+        const step = n < 0 ? -1 : 1;
+        let remaining = Math.abs(n);
+        let guard = 0;
+        while (remaining > 0 && guard++ < 36600) {
+            cur = this.addCalendarDays(cur, step);
+            if (this.isWorkingDay(cur, calendar)) remaining--;
+        }
+        return cur;
     }
 
     /**
@@ -71,19 +115,16 @@ export class CalendarEngine {
      */
     static getWorkingDays(startDateStr, endDateStr, calendar = new ProjectCalendar()) {
         if (!startDateStr || !endDateStr) return 1;
-        let start = new Date(startDateStr);
-        let end = new Date(endDateStr);
-        if (start > end) return 1;
+        if (startDateStr > endDateStr) return 1;
 
         let count = 0;
-        let current = new Date(start);
+        let current = startDateStr;
 
-        while (current <= end) {
-            const dateStr = current.toISOString().split('T')[0];
-            if (this.isWorkingDay(dateStr, calendar)) {
+        while (current <= endDateStr) {
+            if (this.isWorkingDay(current, calendar)) {
                 count++;
             }
-            current.setDate(current.getDate() + 1);
+            current = this.addCalendarDays(current, 1);
         }
 
         return Math.max(1, count);

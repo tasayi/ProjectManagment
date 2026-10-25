@@ -145,7 +145,7 @@ export class DependencyEngine {
         const leafTasks = tasks.filter(t => !t.isSummary);
         let changed = true;
         let iterations = 0;
-        const maxIterations = tasks.length * 2;
+        const maxIterations = tasks.length + 2;
 
         while (changed && iterations < maxIterations) {
             changed = false;
@@ -153,48 +153,41 @@ export class DependencyEngine {
 
             leafTasks.forEach(task => {
                 const preds = this.parsePredecessors(task.predecessors, tasks);
-                let earliestStart = new Date(task.start);
+                const spanBack = Math.max(1, task.duration || 0) - 1;
+                const validPreds = preds.filter(p => p.targetTask && p.targetTask !== task && p.targetTask.start && p.targetTask.finish);
 
-                preds.forEach(pred => {
+                // Tasks with predecessors are fully driven by them; others keep their manual start
+                let earliestStart = null;
+
+                validPreds.forEach(pred => {
                     const predTask = pred.targetTask;
-                    if (!predTask) return;
-
                     let requiredDate;
-                    const predStart = new Date(predTask.start);
-                    const predFinish = new Date(predTask.finish);
 
                     switch (pred.type) {
-                        case 'FS':
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() + 1);
-                            break;
                         case 'SS':
-                            requiredDate = new Date(predStart);
+                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar);
                             break;
                         case 'FF':
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            requiredDate = CalendarEngine.shiftWorkingDays(
+                                CalendarEngine.shiftWorkingDays(predTask.finish, pred.lag, calendar), -spanBack, calendar);
                             break;
                         case 'SF':
-                            requiredDate = new Date(predStart);
-                            requiredDate.setDate(requiredDate.getDate() - (task.duration - 1));
+                            requiredDate = CalendarEngine.shiftWorkingDays(
+                                CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar), -spanBack, calendar);
                             break;
-                        default:
-                            requiredDate = new Date(predFinish);
-                            requiredDate.setDate(requiredDate.getDate() + 1);
+                        default: // FS: next working day after predecessor finish, plus lag in working days
+                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.finish, 1 + pred.lag, calendar);
                     }
 
-                    if (pred.lag !== 0) {
-                        requiredDate.setDate(requiredDate.getDate() + pred.lag);
-                    }
-
-                    if (requiredDate > earliestStart) {
+                    if (!earliestStart || requiredDate > earliestStart) {
                         earliestStart = requiredDate;
                     }
                 });
 
-                const calculatedStart = earliestStart.toISOString().split('T')[0];
-                const calculatedFinish = this.addWorkingDays(calculatedStart, task.duration, calendar);
+                const calculatedStart = CalendarEngine.nextWorkingDay(earliestStart || task.start, calendar);
+                const calculatedFinish = task.duration > 0
+                    ? this.addWorkingDays(calculatedStart, task.duration, calendar)
+                    : calculatedStart;
 
                 if (task.start !== calculatedStart || task.finish !== calculatedFinish) {
                     task.start = calculatedStart;
@@ -202,50 +195,119 @@ export class DependencyEngine {
                     changed = true;
                 }
             });
+
+            // Summary dates must be current when summaries act as predecessors
+            this.updateWBSHierarchy(tasks, calendar);
         }
 
-        this.updateWBSHierarchy(tasks, calendar);
-        this.calculateCriticalPath(tasks);
+        this.calculateCriticalPath(tasks, calendar);
     }
 
     /**
-     * Calculate Critical Path (CPM) Total Slack
+     * Calculate Critical Path (CPM) Total Slack using standard backward pass
      */
-    static calculateCriticalPath(tasks) {
-        if (tasks.length === 0) return;
+    static calculateCriticalPath(tasks, calendar = new ProjectCalendar()) {
+        if (!tasks || tasks.length === 0) return;
+
+        const leafTasks = tasks.filter(t => !t.isSummary && t.start && t.finish);
+        if (leafTasks.length === 0) return;
 
         let maxProjectFinish = null;
-        tasks.forEach(t => {
-            if (t.finish && (!maxProjectFinish || new Date(t.finish) > new Date(maxProjectFinish))) {
+        leafTasks.forEach(t => {
+            if (!maxProjectFinish || t.finish > maxProjectFinish) {
                 maxProjectFinish = t.finish;
             }
         });
 
         if (!maxProjectFinish) return;
 
-        tasks.forEach(t => {
-            const finishDate = new Date(t.finish);
-            const projFinish = new Date(maxProjectFinish);
-            const diffDays = Math.abs((projFinish - finishDate) / (1000 * 60 * 60 * 24));
+        // Initialize Late Finish (LF) and Late Start (LS) for leaf tasks
+        leafTasks.forEach(t => {
+            t.lateFinish = maxProjectFinish;
+            const span = Math.max(1, t.duration || 0) - 1;
+            t.lateStart = CalendarEngine.shiftWorkingDays(t.lateFinish, -span, calendar);
+            t.slack = 0;
+            t.isCritical = false;
+        });
 
-            const isTargetOfPred = tasks.some(other => {
-                const otherPreds = this.parsePredecessors(other.predecessors, tasks);
-                return otherPreds.some(p => p.targetTask.id === t.id);
+        // Iterative backward pass propagating successor constraints to predecessors
+        let changed = true;
+        let iterations = 0;
+        const maxIter = leafTasks.length + 5;
+
+        while (changed && iterations++ < maxIter) {
+            changed = false;
+
+            leafTasks.forEach(task => {
+                const preds = this.parsePredecessors(task.predecessors, tasks);
+                const validPreds = preds.filter(p => p.targetTask && !p.targetTask.isSummary && p.targetTask.start && p.targetTask.finish);
+
+                validPreds.forEach(pred => {
+                    const pTask = pred.targetTask;
+                    const pSpan = Math.max(1, pTask.duration || 0) - 1;
+                    let maxAllowedFinish = pTask.lateFinish;
+
+                    switch (pred.type) {
+                        case 'SS': {
+                            const maxAllowedStart = CalendarEngine.shiftWorkingDays(task.lateStart, -pred.lag, calendar);
+                            const derivedFinish = pTask.duration > 0
+                                ? CalendarEngine.shiftWorkingDays(maxAllowedStart, pSpan, calendar)
+                                : maxAllowedStart;
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                        case 'FF': {
+                            const derivedFinish = CalendarEngine.shiftWorkingDays(task.lateFinish, -pred.lag, calendar);
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                        case 'SF': {
+                            const maxAllowedStart = CalendarEngine.shiftWorkingDays(task.lateFinish, -pred.lag, calendar);
+                            const derivedFinish = pTask.duration > 0
+                                ? CalendarEngine.shiftWorkingDays(maxAllowedStart, pSpan, calendar)
+                                : maxAllowedStart;
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                        default: { // FS
+                            const derivedFinish = CalendarEngine.shiftWorkingDays(task.lateStart, -(1 + pred.lag), calendar);
+                            if (derivedFinish < maxAllowedFinish) maxAllowedFinish = derivedFinish;
+                            break;
+                        }
+                    }
+
+                    if (maxAllowedFinish < pTask.lateFinish) {
+                        pTask.lateFinish = maxAllowedFinish;
+                        pTask.lateStart = pTask.duration > 0
+                            ? CalendarEngine.shiftWorkingDays(pTask.lateFinish, -pSpan, calendar)
+                            : pTask.lateFinish;
+                        changed = true;
+                    }
+                });
             });
+        }
 
-            if (!isTargetOfPred && diffDays <= 1) {
-                t.isCritical = true;
-                t.slack = 0;
-            } else if (t.baseline && t.baseline.finish) {
-                const baselineFinish = new Date(t.baseline.finish);
-                const currentFinish = new Date(t.finish);
-                const drift = Math.round((currentFinish - baselineFinish) / (1000 * 60 * 60 * 24));
-                t.isCritical = drift > 0;
-                t.slack = Math.max(0, -drift);
+        // Determine critical status and total float/slack
+        leafTasks.forEach(t => {
+            if (t.lateStart && t.start) {
+                if (t.lateStart <= t.start) {
+                    t.slack = 0;
+                    t.isCritical = true;
+                } else {
+                    t.slack = CalendarEngine.getWorkingDays(t.start, t.lateStart, calendar) - 1;
+                    t.isCritical = t.slack <= 0;
+                }
             } else {
                 t.isCritical = false;
                 t.slack = 0;
             }
+        });
+
+        // Summary tasks: critical if any subtask is critical
+        const summaryTasks = tasks.filter(t => t.isSummary);
+        summaryTasks.forEach(s => {
+            s.isCritical = tasks.some(c => c.parentId === s.id && c.isCritical);
+            s.slack = 0;
         });
     }
 }

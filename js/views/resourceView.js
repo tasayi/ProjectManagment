@@ -4,6 +4,7 @@
 
 import { WORKSTREAMS } from '../models/taskModel.js';
 import { Resource } from '../models/resourceModel.js';
+import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class ResourceView {
     constructor(containerElement, onResourceChange) {
@@ -75,14 +76,19 @@ export class ResourceView {
 
                     <!-- Right: Fractional Workload Heatmap Matrix -->
                     <div class="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                        <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center">
-                            <span>Engineer Daily Workload Heatmap (% Fractional Loading)</span>
+                        <div class="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 uppercase tracking-wide flex justify-between items-center flex-wrap gap-2">
+                            <div class="flex items-center gap-2">
+                                <span>Engineer Daily Workload Heatmap (% Loading)</span>
+                                <button id="btn-heatmap-today" class="px-2 py-0.5 bg-white hover:bg-slate-200 border border-slate-300 rounded text-[10px] font-semibold text-slate-700 shadow-2xs transition">
+                                    Jump to Today
+                                </button>
+                            </div>
                             <div class="flex items-center gap-2 text-[10px]">
                                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-emerald-200 rounded"></span> ≤100% Normal</span>
                                 <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-500 rounded"></span> >100% Over-Allocated</span>
                             </div>
                         </div>
-                        <div class="flex-1 overflow-auto">
+                        <div class="flex-1 overflow-x-auto overflow-y-auto heatmap-scroll-container">
                             ${this.renderHeatmapMatrix(this.resources, this.tasks)}
                         </div>
                     </div>
@@ -95,13 +101,32 @@ export class ResourceView {
     }
 
     renderHeatmapMatrix(resources, tasks) {
-        const dates = [];
-        let curr = new Date();
-        curr.setDate(curr.getDate() - 2);
+        let minStart = null;
+        let maxFinish = null;
 
-        for (let i = 0; i < 21; i++) {
-            dates.push(curr.toISOString().split('T')[0]);
-            curr.setDate(curr.getDate() + 1);
+        tasks.forEach(t => {
+            if (t.start && (!minStart || t.start < minStart)) minStart = t.start;
+            if (t.finish && (!maxFinish || t.finish > maxFinish)) maxFinish = t.finish;
+        });
+
+        const todayIso = new Date().toISOString().split('T')[0];
+        if (!minStart) minStart = todayIso;
+        if (!maxFinish) maxFinish = CalendarEngine.addCalendarDays(minStart, 30);
+
+        // Pad timeline bounds slightly so all task dates and margins are clearly visible
+        let startRange = CalendarEngine.addCalendarDays(minStart, -3);
+        let endRange = CalendarEngine.addCalendarDays(maxFinish, 7);
+
+        // Ensure minimum 30 days span
+        let daySpan = Math.round((new Date(endRange + 'T00:00:00Z') - new Date(startRange + 'T00:00:00Z')) / 86400000);
+        if (daySpan < 30) {
+            endRange = CalendarEngine.addCalendarDays(startRange, 30);
+            daySpan = 30;
+        }
+
+        const dates = [];
+        for (let i = 0; i <= daySpan; i++) {
+            dates.push(CalendarEngine.addCalendarDays(startRange, i));
         }
 
         // Map fractional workload per resource per date: resourceId_date -> sum of allocation units %
@@ -117,51 +142,61 @@ export class ResourceView {
                 if (!res) return;
 
                 const units = typeof a.units === 'number' ? a.units : 100;
-                let d = new Date(task.start);
-                const finishDate = new Date(task.finish);
+                let cur = task.start;
 
-                while (d <= finishDate) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    const key = `${res.id}_${dateStr}`;
+                while (cur <= task.finish) {
+                    const key = `${res.id}_${cur}`;
                     const currentLoad = workloadMap.get(key) || 0;
                     workloadMap.set(key, currentLoad + units);
-                    d.setDate(d.getDate() + 1);
+                    cur = CalendarEngine.addCalendarDays(cur, 1);
                 }
             });
         });
 
         return `
             <table class="w-full text-left text-xs border-collapse">
-                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0">
+                <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0 z-20">
                     <tr>
-                        <th class="p-2 border-r border-slate-200 min-w-[120px] bg-slate-100">Engineer</th>
+                        <th class="p-2 border-r border-slate-200 min-w-[140px] bg-slate-100 sticky left-0 top-0 z-30 shadow-xs">Engineer</th>
                         ${dates.map(d => {
-                            const dateObj = new Date(d);
-                            const dayNum = dateObj.getDate();
-                            const monthShort = dateObj.toLocaleString('default', { month: 'short' });
-                            return `<th class="p-1 text-center border-r border-slate-200 min-w-[36px] text-[10px]">${monthShort}<br>${dayNum}</th>`;
+                            const dateObj = new Date(d + 'T00:00:00Z');
+                            const dayNum = dateObj.getUTCDate();
+                            const monthShort = dateObj.toLocaleString('default', { month: 'short', timeZone: 'UTC' });
+                            const isToday = d === todayIso;
+                            return `
+                                <th class="p-1 text-center border-r border-slate-200 min-w-[38px] text-[10px] ${isToday ? 'bg-indigo-100 text-indigo-900 font-bold border-b-2 border-indigo-600 shadow-xs' : 'bg-slate-50'}" data-is-today="${isToday}" data-date="${d}">
+                                    <span class="text-[9px] uppercase tracking-wider text-slate-400 font-medium">${monthShort}</span><br>
+                                    <span class="font-bold text-slate-700">${dayNum}</span>
+                                </th>
+                            `;
                         }).join('')}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     ${resources.map(res => `
-                        <tr>
-                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-slate-50/50">
-                                ${this.escapeHtml(res.name)}
+                        <tr class="hover:bg-slate-50/70 transition-colors">
+                            <td class="p-2 font-bold text-slate-800 border-r border-slate-200 bg-white sticky left-0 z-10 shadow-xs">
+                                <div class="flex items-center justify-between gap-1.5">
+                                    <span class="truncate text-xs">${this.escapeHtml(res.name)}</span>
+                                    <span class="text-[9px] font-normal text-slate-500 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded">${this.escapeHtml(res.discipline || 'HW')}</span>
+                                </div>
                             </td>
                             ${dates.map(d => {
                                 const key = `${res.id}_${d}`;
                                 const load = workloadMap.get(key) || 0;
+                                const isToday = d === todayIso;
 
                                 let bgClass = 'bg-white text-slate-300';
-                                if (load > 0 && load <= 100) {
+                                if (load > 0 && load <= 80) {
+                                    bgClass = 'bg-sky-50 text-sky-800 font-medium';
+                                } else if (load > 80 && load <= 100) {
                                     bgClass = 'bg-emerald-100 text-emerald-800 font-bold';
                                 } else if (load > 100) {
-                                    bgClass = 'bg-red-500 text-white font-extrabold shadow-inner';
+                                    bgClass = 'bg-rose-500 text-white font-extrabold shadow-inner';
                                 }
 
                                 return `
-                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} text-[10px]" title="${res.name}: ${load}% total allocation on ${d}">
+                                    <td class="p-1 text-center border-r border-slate-200 ${bgClass} ${isToday ? 'border-x-2 border-indigo-300' : ''} text-[10px]" title="${res.name}: ${load}% total allocation on ${CalendarEngine.formatDate(d)}">
                                         ${load > 0 ? `${load}%` : '-'}
                                     </td>
                                 `;
@@ -202,6 +237,16 @@ export class ResourceView {
                 this.render(this.resources, this.tasks);
             };
         });
+
+        const todayBtn = this.container.querySelector('#btn-heatmap-today');
+        if (todayBtn) {
+            todayBtn.onclick = () => {
+                const todayTh = this.container.querySelector('[data-is-today="true"]');
+                if (todayTh) {
+                    todayTh.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }
+            };
+        }
     }
 
     escapeHtml(str) {

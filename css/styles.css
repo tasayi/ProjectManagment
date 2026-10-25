@@ -46,48 +46,137 @@ body {
     background-color: #6366f1;
 }
 
-/* TARGETED PRINT MEDIA STYLES */
-@media print {
-    /* Hide top app header, modals, toolbar controls */
-    header, .app-toolbar, .gantt-toolbar, .wbs-toolbar, modal, button, input[type="text"]::placeholder {
-        display: none !important;
-    }
-
-    body {
-        background-color: white !important;
-        font-size: 10pt;
-    }
-
-    /* Print Gantt Chart ONLY */
-    body.print-gantt-only .wbs-grid-container {
-        display: none !important;
-    }
-    body.print-gantt-only .gantt-container {
-        width: 100% !important;
-        display: block !important;
-    }
-
-    /* Print WBS Table ONLY */
-    body.print-wbs-only .gantt-container {
-        display: none !important;
-    }
-    body.print-wbs-only .wbs-grid-container {
-        width: 100% !important;
-        display: block !important;
-    }
-
-    /* Print Milestones ONLY */
-    body.print-milestones-only .main-split-view {
-        display: none !important;
-    }
-    body.print-milestones-only .milestones-view {
-        display: block !important;
-        width: 100% !important;
-    }
-
-    /* Page Breaks */
-    .page-break {
-        page-break-after: always;
-    }
+/* Table Column Resizer */
+.col-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 20;
 }
 
+.col-resizer:hover, .col-resizer.is-resizing {
+    background-color: #6366f1;
+}
+
+/* Modal Animations */
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalScaleUp {
+    from { transform: scale(0.96) translateY(4px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.modal-backdrop-animate {
+    animation: modalFadeIn 0.15s ease-out forwards;
+}
+
+.modal-card-animate {
+    animation: modalScaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* WBS Row Active & Hover styling */
+.wbs-row {
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.wbs-row.is-active {
+    background-color: #eef2ff !important;
+    border-left: 3px solid #6366f1 !important;
+}
+
+/* Critical Path Glow */
+.is-critical-bar {
+    outline: 2px solid #ef4444;
+    outline-offset: 1px;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* SVG Dependency Line polish */
+.gantt-dep-line {
+    transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+.gantt-dep-line:hover {
+    stroke-width: 2.5;
+    stroke: #4f46e5 !important;
+}
+
+.gantt-dep-line.critical {
+    stroke: #dc2626 !important;
+    stroke-width: 2;
+}
+
+/* Milestone Diamond hover transition */
+.milestone-diamond {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.milestone-diamond:hover {
+    transform: rotate(45deg) scale(1.15);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Sticky Resource Heatmap styling */
+.sticky-res-col {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background-color: #ffffff;
+}
+
+.sticky-res-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: #f8fafc;
+}
+
+.sticky-res-corner {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    background-color: #f1f5f9;
+}
+
+/* PRINT: only the off-screen #print-root (full table / full Gantt) is printed */
+#print-root {
+    display: none;
+}
+
+@media print {
+    * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    body.printing-custom {
+        display: block !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: white !important;
+    }
+
+    body.printing-custom > *:not(#print-root) {
+        display: none !important;
+    }
+
+    body.printing-custom #print-root {
+        display: block !important;
+    }
+
+    #print-root .print-page-break {
+        break-before: page;
+    }
+
+    #print-root tr {
+        break-inside: avoid;
+    }
+}

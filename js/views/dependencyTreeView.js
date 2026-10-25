@@ -5,6 +5,7 @@
 
 import { HARDWARE_STAGES, WORKSTREAMS, STATUS_PILLS } from '../models/taskModel.js';
 import { DependencyEngine } from '../engine/dependencyEngine.js';
+import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class DependencyTreeView {
     constructor(containerElement) {
@@ -55,15 +56,25 @@ export class DependencyTreeView {
 
         // Group tasks by Stage for horizontal pipeline alignment
         const stageMap = new Map();
-        HARDWARE_STAGES.forEach(stg => stageMap.set(stg, []));
         leafTasks.forEach(t => {
             const stg = t.stage || 'EVT';
             if (!stageMap.has(stg)) stageMap.set(stg, []);
             stageMap.get(stg).push(t);
         });
 
-        // Generate Node Cards per stage
-        const columnsHtml = HARDWARE_STAGES.map(stage => {
+        // Determine relevant stages in developmental lifecycle order (only stages with active tasks)
+        const presentStages = new Set(stageMap.keys());
+        const orderedStages = [
+            ...HARDWARE_STAGES.filter(s => presentStages.has(s) && (stageMap.get(s) || []).length > 0),
+            ...Array.from(presentStages).filter(s => !HARDWARE_STAGES.includes(s) && (stageMap.get(s) || []).length > 0)
+        ];
+
+        if (orderedStages.length === 0) {
+            return `<div class="p-8 text-center text-slate-400 italic">No stage activities found.</div>`;
+        }
+
+        // Generate Node Cards only for relevant stages
+        const columnsHtml = orderedStages.map(stage => {
             const stageTasks = stageMap.get(stage) || [];
             return `
                 <div class="stage-flow-column flex-shrink-0 w-72 flex flex-col gap-4">
@@ -94,7 +105,7 @@ export class DependencyTreeView {
         const predBadges = preds.map(p => `${p.targetTask.wbs}${p.type}${p.lag ? (p.lag > 0 ? '+' + p.lag + 'd' : p.lag + 'd') : ''}`).join(', ');
 
         return `
-            <div data-node-id="${task.id}" class="task-node-card bg-white p-3 rounded-lg border-2 ${isCritical ? 'border-red-500 ring-2 ring-red-200 shadow-md' : 'border-slate-200 shadow-sm'} hover:shadow-lg transition-all space-y-2 relative">
+            <div data-node-id="${task.id}" class="task-node-card bg-white p-3 rounded-lg border-2 ${isCritical ? 'border-red-500 ring-2 ring-red-200 shadow-md' : 'border-slate-200 shadow-sm'} hover:shadow-md hover:-translate-y-0.5 transition duration-150 space-y-2 relative">
                 
                 <!-- Card Header -->
                 <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-1.5">
@@ -115,8 +126,8 @@ export class DependencyTreeView {
                 <div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 font-mono">
                     <div><span class="text-slate-400">Dur:</span> <span class="font-bold text-slate-800">${task.duration}d</span></div>
                     <div><span class="text-slate-400">Lead:</span> <span class="font-bold text-amber-700">${task.leadTime || 0}d</span></div>
-                    <div><span class="text-slate-400">Start:</span> ${task.start || '-'}</div>
-                    <div><span class="text-slate-400">End:</span> ${task.finish || '-'}</div>
+                    <div><span class="text-slate-400">Start:</span> ${CalendarEngine.formatDate(task.start) || '-'}</div>
+                    <div><span class="text-slate-400">End:</span> ${CalendarEngine.formatDate(task.finish) || '-'}</div>
                 </div>
 
                 <!-- Engineer & Predecessors -->

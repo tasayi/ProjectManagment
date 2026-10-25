@@ -4,6 +4,7 @@
 
 import { HARDWARE_STAGES, WORKSTREAMS, STATUS_PILLS } from '../models/taskModel.js';
 import { BaselineEngine } from '../engine/baselineEngine.js';
+import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class MilestonesView {
     constructor(containerElement) {
@@ -83,12 +84,12 @@ export class MilestonesView {
                 <div class="text-[11px] text-slate-600 space-y-0.5 font-mono">
                     <div class="flex justify-between">
                         <span class="text-slate-400">Target:</span>
-                        <span class="font-bold text-slate-800">${m.finish || m.start}</span>
+                        <span class="font-bold text-slate-800">${CalendarEngine.formatDate(m.finish || m.start)}</span>
                     </div>
                     ${m.baseline && m.baseline.finish ? `
                         <div class="flex justify-between text-[10px]">
                             <span class="text-slate-400">Baseline:</span>
-                            <span class="text-slate-500 line-through">${m.baseline.finish}</span>
+                            <span class="text-slate-500 line-through">${CalendarEngine.formatDate(m.baseline.finish)}</span>
                         </div>
                     ` : ''}
                 </div>

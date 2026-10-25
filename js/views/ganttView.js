@@ -2,7 +2,7 @@
  * Gantt View Component: Interactive SVG Timeline, Enhanced Dependency Arrows, Baseline Ghost Bars & Bidirectional Drag & Drop
  */
 
-import { WORKSTREAMS } from '../models/taskModel.js';
+import { WORKSTREAMS, getContrastTextColor } from '../models/taskModel.js';
 import { DependencyEngine } from '../engine/dependencyEngine.js';
 import { BaselineEngine } from '../engine/baselineEngine.js';
 import { CalendarEngine } from '../engine/calendarEngine.js';
@@ -18,6 +18,8 @@ export class GanttView {
         this.dayWidth = 28;
         this.rowHeight = 33;
         this.calendar = null;
+        this.printMode = false;
+        this.timelineWidth = 0;
     }
 
     render(tasks, calendar) {
@@ -36,12 +38,13 @@ export class GanttView {
         else if (this.zoom === 'Month') this.dayWidth = 14;
 
         const timelineWidth = Math.max(800, this.totalDays * this.dayWidth);
+        this.timelineWidth = timelineWidth;
         const visibleTasks = this.getVisibleTasks(tasks);
 
         const html = `
-            <div class="gantt-container flex flex-col h-full bg-white overflow-hidden select-none">
+            <div class="gantt-container flex flex-col ${this.printMode ? '' : 'h-full overflow-hidden'} bg-white select-none">
                 <!-- Gantt Controls Toolbar -->
-                <div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
+                ${this.printMode ? '' : `<div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
                     <!-- Zoom Controls -->
                     <div class="flex items-center gap-1">
                         <span class="text-slate-500 font-semibold uppercase text-[10px]">Zoom:</span>
@@ -63,13 +66,13 @@ export class GanttView {
                             <span>Baseline Shadows</span>
                         </label>
                     </div>
-                </div>
+                </div>`}
 
                 <!-- Timeline View Area -->
-                <div class="gantt-scroll-pane flex-1 overflow-auto relative bg-white">
+                <div class="gantt-scroll-pane ${this.printMode ? '' : 'flex-1 overflow-auto'} relative bg-white">
                     <div style="width: ${timelineWidth}px;" class="min-h-full relative">
                         <!-- Header Calendar Row -->
-                        <div class="gantt-header sticky top-0 z-20 bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
+                        <div class="gantt-header ${this.printMode ? '' : 'sticky top-0 z-20'} bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
                             ${this.renderHeader(timelineWidth)}
                         </div>
 
@@ -77,6 +80,9 @@ export class GanttView {
                         <div class="gantt-body relative" style="height: ${visibleTasks.length * this.rowHeight}px;">
                             <!-- Grid Background Lines with Calendar Shading -->
                             ${this.renderGridLines(timelineWidth, visibleTasks.length)}
+
+                            <!-- Today Vertical Marker Line -->
+                            ${this.renderTodayMarker(timelineWidth)}
 
                             <!-- Predecessor Connector Lines SVG -->
                             <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
@@ -94,7 +100,7 @@ export class GanttView {
         `;
 
         this.container.innerHTML = html;
-        this.attachEventListeners(visibleTasks);
+        if (!this.printMode) this.attachEventListeners(visibleTasks);
     }
 
     getTimelineBounds(tasks) {
@@ -131,6 +137,7 @@ export class GanttView {
     }
 
     getVisibleTasks(tasks) {
+        if (this.printMode) return tasks;
         const hiddenIds = new Set();
         const idMap = new Map(tasks.map(t => [t.id, t]));
 
@@ -154,16 +161,15 @@ export class GanttView {
         const monthsHtml = [];
         const daysHtml = [];
         
-        let curr = new Date(this.startDate);
-        const end = new Date(this.endDate);
-        
+        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
         let currentMonth = '';
         let monthWidth = 0;
 
-        while (curr <= end) {
-            const dateStr = curr.toISOString().split('T')[0];
-            const monthName = curr.toLocaleString('default', { month: 'short', year: 'numeric' });
-            const dayNum = curr.getDate();
+        for (let i = 0; i <= totalDays; i++) {
+            const dateStr = CalendarEngine.addCalendarDays(this.startDate, i);
+            const dt = new Date(dateStr + 'T00:00:00Z');
+            const monthName = dt.toLocaleString('default', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+            const dayNum = dt.getUTCDate();
 
             const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
             const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
@@ -198,8 +204,6 @@ export class GanttView {
             } else {
                 monthWidth += this.dayWidth;
             }
-
-            curr.setDate(curr.getDate() + 1);
         }
 
         if (currentMonth) {
@@ -214,11 +218,10 @@ export class GanttView {
 
     renderGridLines(timelineWidth, rowCount) {
         const columns = [];
-        let curr = new Date(this.startDate);
-        const end = new Date(this.endDate);
+        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
 
-        while (curr <= end) {
-            const dateStr = curr.toISOString().split('T')[0];
+        for (let i = 0; i <= totalDays; i++) {
+            const dateStr = CalendarEngine.addCalendarDays(this.startDate, i);
             const isHoliday = CalendarEngine.getHoliday(dateStr, this.calendar);
             const isOvertime = CalendarEngine.getOvertime(dateStr, this.calendar);
             const isWorking = CalendarEngine.isWorkingDay(dateStr, this.calendar);
@@ -235,7 +238,6 @@ export class GanttView {
             columns.push(`
                 <div style="width: ${this.dayWidth}px;" class="h-full flex-shrink-0 border-r border-slate-100 ${bgClass}"></div>
             `);
-            curr.setDate(curr.getDate() + 1);
         }
 
         return `
@@ -245,19 +247,30 @@ export class GanttView {
         `;
     }
 
+    renderTodayMarker(timelineWidth) {
+        const todayIso = new Date().toISOString().split('T')[0];
+        if (todayIso >= this.startDate && todayIso <= this.endDate) {
+            const todayX = this.dateToPixel(todayIso);
+            if (todayX >= 0 && todayX <= timelineWidth) {
+                return `
+                    <div style="left: ${todayX + this.dayWidth / 2}px;" class="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-25 pointer-events-none" title="Today (${todayIso})">
+                        <div class="sticky top-0 -ml-3.5 px-1 py-0.5 bg-rose-600 text-white text-[9px] font-bold rounded-b shadow-xs uppercase tracking-wider text-center">Today</div>
+                    </div>
+                `;
+            }
+        }
+        return '';
+    }
+
     dateToPixel(dateStr) {
-        if (!dateStr) return 0;
-        const d = new Date(dateStr);
-        const start = new Date(this.startDate);
-        const days = (d - start) / (1000 * 60 * 60 * 24);
-        return Math.max(0, days * this.dayWidth);
+        if (!dateStr || !this.startDate) return 0;
+        const diffDays = Math.round((new Date(dateStr + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
+        return Math.max(0, diffDays * this.dayWidth);
     }
 
     pixelToDate(px) {
         const days = Math.round(px / this.dayWidth);
-        const start = new Date(this.startDate);
-        start.setDate(start.getDate() + days);
-        return start.toISOString().split('T')[0];
+        return CalendarEngine.addCalendarDays(this.startDate, days);
     }
 
     renderTaskBar(task, rowIndex) {
@@ -278,7 +291,7 @@ export class GanttView {
             const ghostY = y + 18;
 
             baselineGhostHtml = `
-                <div style="left: ${bx}px; top: ${ghostY}px; width: ${bWidth}px; height: 6px;" class="absolute rounded bg-slate-300/70 border border-slate-400 border-dashed pointer-events-none z-10" title="Baseline: ${task.baseline.start} to ${task.baseline.finish}"></div>
+                <div style="left: ${bx}px; top: ${ghostY}px; width: ${bWidth}px; height: 6px;" class="absolute rounded bg-slate-300/70 border border-slate-400 border-dashed pointer-events-none z-10" title="Baseline: ${CalendarEngine.formatDate(task.baseline.start)} to ${CalendarEngine.formatDate(task.baseline.finish)}"></div>
             `;
         }
 
@@ -302,8 +315,8 @@ export class GanttView {
             const mx = x + this.dayWidth / 2 - 8;
             return `
                 ${baselineGhostHtml}
-                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${task.start})">
-                    <div class="w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm group-hover:scale-115 transition-transform"></div>
+                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${CalendarEngine.formatDate(task.start)})">
+                    <div class="milestone-diamond w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm transition-transform"></div>
                     <span class="absolute left-5 top-0 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
                         ◆ ${this.escapeHtml(task.name)}
                     </span>
@@ -323,16 +336,17 @@ export class GanttView {
         }
 
         const barColor = isCritical ? '#ef4444' : ws.color;
+        const textColor = isCritical ? '#ffffff' : getContrastTextColor(barColor);
         const progressWidth = `${task.progress || 0}%`;
 
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 ring-2 ring-red-300' : 'border-black/10'} group cursor-move z-15 flex items-center text-white text-[11px] font-medium px-2 select-none overflow-visible">
+            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 is-critical-bar' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
-                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''}
+                    ${this.escapeHtml(task.name)} ${task.getFormattedAssignments() !== 'Unassigned' ? `(${this.escapeHtml(task.getFormattedAssignments())})` : ''} <span class="opacity-90 font-bold">${task.progress || 0}%</span>
                 </span>
 
                 ${variance.hasBaseline && variance.finishVarianceDays !== 0 ? `
@@ -347,6 +361,7 @@ export class GanttView {
     }
 
     renderDependencies(visibleTasks) {
+        const sfx = this.printMode ? '-print' : '';
         const taskRowIndexMap = new Map(visibleTasks.map((t, idx) => [t.id, idx]));
         const paths = [];
 
@@ -370,7 +385,7 @@ export class GanttView {
                 const isCritical = this.showCriticalPath && (task.isCritical && targetTask.isCritical);
                 const strokeColor = isCritical ? '#ef4444' : '#475569';
                 const strokeWidth = isCritical ? 2.5 : 1.8;
-                const markerId = isCritical ? 'arrowhead-red' : 'arrowhead-slate';
+                const markerId = (isCritical ? 'arrowhead-red' : 'arrowhead-slate') + sfx;
 
                 const midX = fromX + 12;
                 let pathData = '';
@@ -383,17 +398,17 @@ export class GanttView {
                 }
 
                 paths.push(`
-                    <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
+                    <path class="gantt-dep-line ${isCritical ? 'critical' : ''}" d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
                 `);
             });
         });
 
         return `
             <defs>
-                <marker id="arrowhead-slate" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <marker id="arrowhead-slate${sfx}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
                 </marker>
-                <marker id="arrowhead-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <marker id="arrowhead-red${sfx}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
                 </marker>
             </defs>
@@ -440,6 +455,8 @@ export class GanttView {
         let initialTaskStart = null;
         let initialDuration = 1;
         let draggedBarElement = null;
+        let initialX = 0;
+        let initialWidth = 0;
 
         const onMouseDown = (e) => {
             const handle = e.target.closest('[data-handle="right"]');
@@ -454,8 +471,10 @@ export class GanttView {
             isResizing = Boolean(handle);
             startMouseX = e.clientX;
             initialTaskStart = task.start;
-            initialDuration = task.duration;
+            initialDuration = task.duration || 1;
             draggedBarElement = bar;
+            initialX = parseFloat(bar.style.left) || this.dateToPixel(task.start);
+            initialWidth = parseFloat(bar.style.width) || this.dayWidth;
 
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
@@ -465,35 +484,52 @@ export class GanttView {
             if (!activeTaskId || !draggedBarElement) return;
 
             const deltaPx = e.clientX - startMouseX;
-            const deltaDays = Math.round(deltaPx / this.dayWidth);
-            const task = this.tasks.find(t => t.id === activeTaskId);
-            if (!task) return;
 
             if (isResizing) {
-                const newDuration = Math.max(1, initialDuration + deltaDays);
-                task.duration = newDuration;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                const newWidth = Math.max(this.dayWidth, initialWidth + deltaPx);
+                draggedBarElement.style.width = `${newWidth}px`;
             } else {
-                const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
-                task.start = newStart;
-                task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                const newX = Math.max(0, initialX + deltaPx);
+                draggedBarElement.style.left = `${newX}px`;
             }
-
-            this.render(this.tasks, this.calendar);
         };
 
-        const onMouseUp = () => {
+        const onMouseUp = (e) => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
 
-            if (activeTaskId && this.onTaskUpdate) {
-                this.onTaskUpdate(activeTaskId);
+            if (activeTaskId) {
+                const deltaPx = e.clientX - startMouseX;
+                const deltaDays = Math.round(deltaPx / this.dayWidth);
+                const task = this.tasks.find(t => t.id === activeTaskId);
+
+                if (task) {
+                    if (isResizing) {
+                        const newDuration = Math.max(1, initialDuration + deltaDays);
+                        task.duration = newDuration;
+                        task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                    } else if (deltaDays !== 0) {
+                        const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
+                        task.start = newStart;
+                        task.finish = task.duration > 0
+                            ? DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar)
+                            : task.start;
+                    }
+                }
+
+                if (this.onTaskUpdate) {
+                    this.onTaskUpdate(activeTaskId);
+                }
             }
 
             activeTaskId = null;
             draggedBarElement = null;
         };
 
+        if (this._onGanttMouseDown) {
+            pane.removeEventListener('mousedown', this._onGanttMouseDown);
+        }
+        this._onGanttMouseDown = onMouseDown;
         pane.addEventListener('mousedown', onMouseDown);
     }
 
