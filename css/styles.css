@@ -91,6 +91,73 @@ body {
     border-left: 3px solid #6366f1 !important;
 }
 
+/* Keep the identifying activity columns visible during horizontal grid scrolling. */
+.wbs-grid-container .sticky-wbs-col,
+.wbs-grid-container .sticky-name-col {
+    position: sticky;
+    background-color: #ffffff;
+    background-clip: padding-box;
+}
+
+.wbs-grid-container thead .sticky-wbs-col,
+.wbs-grid-container thead .sticky-name-col {
+    z-index: 15;
+    top: 0;
+    background-color: #f1f5f9;
+}
+
+.wbs-grid-container tbody .sticky-wbs-col {
+    z-index: 5;
+    box-shadow: 2px 0 3px -3px rgba(15, 23, 42, 0.45);
+}
+
+.wbs-grid-container tbody .sticky-name-col {
+    z-index: 4;
+    box-shadow: 3px 0 4px -4px rgba(15, 23, 42, 0.45);
+}
+
+.wbs-grid-container .wbs-row:hover .sticky-wbs-col,
+.wbs-grid-container .wbs-row:hover .sticky-name-col {
+    background-color: #f8fafc;
+}
+
+.wbs-grid-container .wbs-row.is-active .sticky-wbs-col,
+.wbs-grid-container .wbs-row.is-active .sticky-name-col {
+    background-color: #eef2ff;
+}
+
+.wbs-grid-container .wbs-row {
+    height: 48px;
+}
+
+.wbs-grid-container .wbs-row > td {
+    height: 48px;
+    vertical-align: middle;
+}
+
+.wbs-grid-container thead tr {
+    height: 48px;
+}
+
+.wbs-grid-container thead th {
+    height: 48px;
+    box-sizing: border-box;
+}
+
+.gantt-header {
+    height: 44px;
+}
+
+.gantt-header > .flex {
+    height: 22px;
+}
+
+.gantt-header > .flex > div {
+    box-sizing: border-box;
+    height: 22px;
+    overflow: hidden;
+}
+
 /* Critical Path Glow */
 .is-critical-bar {
     outline: 2px solid #ef4444;

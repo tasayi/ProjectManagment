@@ -68,6 +68,9 @@ export class MilestonesView {
         const ws = WORKSTREAMS[m.workstream] || WORKSTREAMS['HW'];
         const statusInfo = STATUS_PILLS[m.status] || STATUS_PILLS['Not Started'];
         const variance = BaselineEngine.getVariance(m);
+        const complete = m.status === 'Complete' || Number(m.progress) >= 100;
+        const targetStart = complete && m.actualStart ? m.actualStart : (m.projectedStart || m.forecastStart || m.start);
+        const targetFinish = complete && m.actualFinish ? m.actualFinish : (m.projectedFinish || m.forecastFinish || m.finish);
 
         return `
             <div class="milestone-card bg-white p-3 rounded border border-slate-200 shadow-sm hover:shadow transition-shadow space-y-2">
@@ -84,7 +87,7 @@ export class MilestonesView {
                 <div class="text-[11px] text-slate-600 space-y-0.5 font-mono">
                     <div class="flex justify-between">
                         <span class="text-slate-400">Target:</span>
-                        <span class="font-bold text-slate-800">${CalendarEngine.formatDate(m.finish || m.start)}</span>
+                        <span class="font-bold text-slate-800">${CalendarEngine.formatDate(targetFinish || targetStart)}</span>
                     </div>
                     ${m.baseline && m.baseline.finish ? `
                         <div class="flex justify-between text-[10px]">

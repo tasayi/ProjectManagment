@@ -80,6 +80,8 @@ flowchart TD
 | **CPM** | Critical Path Method | Analytical technique calculating the longest chain of dependent activities determining project completion. |
 | **PERT** | Program Evaluation and Review Technique | Network diagram visualization displaying dependencies as a Directed Acyclic Graph (DAG). |
 | **Slack / Float** | Total Float | The number of working days a task can be delayed without delaying the overall project target completion date. |
-| **Baseline** | Baseline Snapshot | Stored benchmark copy of project dates used to calculate variance and schedule slippage. |
-| **Variance** | Schedule Drift | The difference in working days between current finish date and baseline finish date ($\Delta\text{Days} = \text{Finish} - \text{BaselineFinish}$). |
+| **Baseline** | Baseline Snapshot | Stored benchmark copy shown in Baseline Start/Finish; a new baseline uses actual dates for completed activities and projected dates otherwise. |
+| **Projected Dates** | Forecast Schedule | Dependency- and calendar-based estimates for current/future work; delay changes these without shifting saved baseline dates. |
+| **Actual Dates** | Execution Dates | User-entered dates on which work actually started or finished. |
+| **Variance** | Schedule Drift | The difference in working days between current actual/projected finish and baseline finish ($\Delta\text{Days} = \text{CurrentFinish} - \text{BaselineFinish}$). |
 

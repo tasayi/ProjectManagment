@@ -102,6 +102,8 @@ class ProjectManagementApp {
     }
 
     renderAllViews() {
+        const splitScrollState = this.captureSplitScrollState();
+
         // Update Title Input
         const titleInput = document.getElementById('project-title-input');
         if (titleInput) titleInput.value = this.projectTitle;
@@ -146,8 +148,10 @@ class ProjectManagementApp {
             if (deptreeContainer) deptreeContainer.style.display = 'none';
             if (infoGuideContainer) infoGuideContainer.style.display = 'none';
 
+            this.wbsView.selectedTaskId = this.selectedTaskId;
             this.wbsView.render(this.tasks, this.resources);
             this.ganttView.render(this.tasks, this.calendar);
+            this.bindSplitScrollSync(splitScrollState);
         } else if (this.activeView === 'resources') {
             if (splitContainer) splitContainer.style.display = 'none';
             if (milestonesContainer) milestonesContainer.style.display = 'none';
@@ -186,6 +190,80 @@ class ProjectManagementApp {
         ProjectStore.saveToLocalStorage(this.projectTitle, this.tasks, this.resources, this.calendar);
     }
 
+    captureSplitScrollState() {
+        if (!this.wbsView || !this.ganttView) return null;
+        const gridPane = this.wbsView.container?.querySelector('.wbs-table-wrapper');
+        const ganttPane = this.ganttView.container?.querySelector('.gantt-scroll-pane');
+        if (!gridPane || !ganttPane) return null;
+        return {
+            gridTop: gridPane.scrollTop,
+            gridLeft: gridPane.scrollLeft,
+            ganttTop: ganttPane.scrollTop,
+            ganttLeft: ganttPane.scrollLeft
+        };
+    }
+
+    bindSplitScrollSync(savedState = null) {
+        const gridPane = this.wbsView?.container?.querySelector('.wbs-table-wrapper');
+        const ganttPane = this.ganttView?.container?.querySelector('.gantt-scroll-pane');
+        if (!gridPane || !ganttPane) return;
+
+        if (this._gridScrollPane && this._onGridScroll) {
+            this._gridScrollPane.removeEventListener('scroll', this._onGridScroll);
+        }
+        if (this._ganttScrollPane && this._onGanttScroll) {
+            this._ganttScrollPane.removeEventListener('scroll', this._onGanttScroll);
+        }
+
+        if (savedState) {
+            gridPane.scrollTop = savedState.gridTop;
+            gridPane.scrollLeft = savedState.gridLeft;
+            ganttPane.scrollTop = savedState.ganttTop;
+            ganttPane.scrollLeft = savedState.ganttLeft;
+        }
+
+        this._gridScrollPane = gridPane;
+        this._ganttScrollPane = ganttPane;
+        this._syncingSplitScroll = false;
+        this._onGridScroll = () => this.syncSplitScroll(gridPane, ganttPane);
+        this._onGanttScroll = () => this.syncSplitScroll(ganttPane, gridPane);
+        this.wbsView.onScrollSync = () => this.syncSplitScroll(gridPane, ganttPane);
+        gridPane.addEventListener('scroll', this._onGridScroll, { passive: true });
+        ganttPane.addEventListener('scroll', this._onGanttScroll, { passive: true });
+        this.syncSplitScroll(gridPane, ganttPane);
+    }
+
+    syncSplitScroll(sourcePane, targetPane) {
+        if (!sourcePane || !targetPane) return;
+        if (this._programmaticSplitScroll?.pane === sourcePane) {
+            const expectedTop = this._programmaticSplitScroll.top;
+            this._programmaticSplitScroll = null;
+            if (Math.abs(sourcePane.scrollTop - expectedTop) < 1) return;
+        }
+
+        const getRows = pane => {
+            const tableRows = [...pane.querySelectorAll('tbody tr[data-id]')];
+            if (tableRows.length) return tableRows.map(row => ({ id: row.getAttribute('data-id'), element: row }));
+            return [...pane.querySelectorAll('.gantt-bars-layer [data-task-id]')]
+                .map(element => ({ id: element.getAttribute('data-task-id'), element }));
+        };
+        const sourceRows = getRows(sourcePane);
+        if (!sourceRows.length) return;
+
+        const sourceHeader = sourcePane.querySelector('thead') || sourcePane.querySelector('.gantt-header');
+        const visibleTop = sourcePane.getBoundingClientRect().top + (sourceHeader?.getBoundingClientRect().height || 0);
+        const sourceRow = sourceRows.find(row => row.element.getBoundingClientRect().bottom > visibleTop + 1);
+        if (!sourceRow) return;
+
+        const targetRow = getRows(targetPane).find(row => row.id === sourceRow.id);
+        if (!targetRow) return;
+        const difference = targetRow.element.getBoundingClientRect().top - sourceRow.element.getBoundingClientRect().top;
+        if (Math.abs(difference) < 1) return;
+
+        targetPane.scrollTop += difference;
+        this._programmaticSplitScroll = { pane: targetPane, top: targetPane.scrollTop };
+    }
+
     handleTaskChange(taskId, actionOrField, value) {
         if (!actionOrField) return;
 
@@ -195,7 +273,7 @@ class ProjectManagementApp {
             let stage = 'EVT';
             let workstream = 'HW';
             let insertIndex = this.tasks.length;
-            let startDate = new Date().toISOString().split('T')[0];
+            let startDate = DependencyEngine.getLocalToday();
 
             if (this.selectedTaskId) {
                 const selectedIndex = this.tasks.findIndex(t => t.id === this.selectedTaskId);
@@ -204,7 +282,7 @@ class ProjectManagementApp {
                     parentId = selectedTask.parentId || null;
                     stage = selectedTask.stage || 'EVT';
                     workstream = selectedTask.workstream || 'HW';
-                    startDate = selectedTask.start || startDate;
+                    startDate = selectedTask.projectedStart || selectedTask.start || startDate;
 
                     // Insert after selected task and all of its recursive child descendants
                     insertIndex = selectedIndex + 1;
@@ -221,7 +299,7 @@ class ProjectManagementApp {
                 parentId = lastTask.parentId || null;
                 stage = lastTask.stage || 'EVT';
                 workstream = lastTask.workstream || 'HW';
-                startDate = lastTask.start || startDate;
+                startDate = lastTask.projectedStart || lastTask.start || startDate;
             }
 
             const newTask = new Task({
@@ -250,7 +328,13 @@ class ProjectManagementApp {
             const task = this.tasks.find(t => t.id === taskId);
             if (task) {
                 task[actionOrField] = value;
-                if (actionOrField === 'duration') task.isMilestone = value === 0;
+                if (actionOrField === 'duration') {
+                    task.isMilestone = value === 0;
+                    task.projectedDuration = value;
+                }
+                if (actionOrField === 'start') {
+                    task.plannedStart = value;
+                }
             }
         }
 

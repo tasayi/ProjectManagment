@@ -4,14 +4,25 @@
 
 export class Task {
     constructor(data = {}) {
+        const now = new Date();
+        const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         this.id = data.id || 'task_' + Math.random().toString(36).substr(2, 9);
         this.wbs = data.wbs || '1';
         this.name = data.name || 'New Activity';
         this.duration = typeof data.duration === 'number' ? data.duration : 1; // in working days
-        this.start = data.start || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        this.start = data.start || localToday; // YYYY-MM-DD
         this.finish = data.finish || this.calculateFinishDate(this.start, this.duration);
+        this.plannedStart = data.plannedStart || this.start;
+        this.plannedFinish = data.plannedFinish || this.finish;
+        this.projectedStart = data.projectedStart || data.forecastStart || this.start;
+        this.projectedFinish = data.projectedFinish || data.forecastFinish || this.finish;
+        this.actualStart = data.actualStart || '';
+        this.actualFinish = data.actualFinish || '';
+        this.projectedStartConstraint = data.projectedStartConstraint || '';
+        this.projectedDuration = typeof data.projectedDuration === 'number' ? data.projectedDuration : this.duration;
         this.predecessors = data.predecessors || ''; // e.g. "2FS+3d, 4SS"
         this.progress = typeof data.progress === 'number' ? data.progress : 0; // 0 to 100
+        this.delayDays = Math.max(0, parseInt(data.delayDays, 10) || 0); // Manually recorded schedule delay in working days
         
         // Metadata & Workstreams
         this.stage = data.stage || 'EVT'; // Concept, EVT, DVT, PVT, MP, or custom
@@ -65,6 +76,11 @@ export class Task {
             this.baseline = null;
         }
 
+        if (this.baseline) {
+            this.start = this.baseline.start || this.plannedStart;
+            this.finish = this.baseline.finish || this.plannedFinish;
+        }
+
         // Calculated Engine Properties (Transient)
         this.earlyStart = null;
         this.earlyFinish = null;
@@ -72,17 +88,22 @@ export class Task {
         this.lateFinish = null;
         this.slack = 0;
         this.isCritical = false;
+        // Backward-compatible aliases for integrations that still read the previous field names.
+        this.forecastStart = this.projectedStart;
+        this.forecastFinish = this.projectedFinish;
+        this.isOverdue = false;
+        this.overdueDays = 0;
     }
 
     calculateFinishDate(startDateStr, durationDays) {
         if (!startDateStr) return '';
-        const date = new Date(startDateStr);
+        const date = new Date(`${startDateStr}T00:00:00Z`);
         let added = 0;
         const days = Math.max(1, durationDays);
         
         while (added < days - 1) {
-            date.setDate(date.getDate() + 1);
-            const dayOfWeek = date.getDay();
+            date.setUTCDate(date.getUTCDate() + 1);
+            const dayOfWeek = date.getUTCDay();
             if (dayOfWeek !== 0 && dayOfWeek !== 6) {
                 added++;
             }

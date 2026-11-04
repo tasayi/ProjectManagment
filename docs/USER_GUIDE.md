@@ -61,6 +61,18 @@ The top header bar provides instant access to project management controls:
 1. Click **Add Activity** in the Grid toolbar to insert a new activity. The new task automatically inherits the **hierarchy level** (parent ID), stage, and workstream of the currently selected row, inserted directly below it.
 2. Select a row and click **Indent** to indent the activity underneath the previous row, turning the parent row into a **Summary Task**.
 3. Click **Outdent** to promote a subtask up one hierarchy level.
+4. Enter additional schedule slip in **Delay (d)**. The value is in working days and pushes the forecast for that activity and its dependent activities without changing planned dates or baseline snapshots.
+5. Select an activity and click **Notes** to add or edit notes. A notes icon appears next to its WBS number after notes are saved; click the icon to edit them later.
+
+The **WBS** and **Activity Name** columns stay visible while scrolling the activity grid horizontally. The Gantt and activity rows scroll vertically together. When editing an input, press **Enter** to save it and move to the next activity in the same column.
+
+### Forecast, overdue activities, and baselines
+- **Baseline Start/Finish** show the selected saved baseline and do not move when delays or dependencies change.
+- **Projected Start/Finish** are calculated from the activity's baseline start, predecessor links, delay, progress, and project calendar. An overdue activity is incomplete (not **Complete** and below 100%) with its latest planned finish before today; it is reforecast from today using estimated remaining duration.
+- **Actual Start/Finish** are entered separately when dates are known. Completed predecessors use their actual dates when present; downstream projected dates then recalculate.
+- When capturing a new baseline, completed activities use actual dates (or projected dates if actuals are missing), and unfinished activities use projected dates. The new snapshot becomes the dates shown in Baseline Start/Finish. Selecting an older baseline changes that display but does not rewrite the current projection inputs.
+- Gantt bars show actual dates for completed activities when entered, otherwise projected dates. Dragging or resizing an unfinished bar adjusts the projection only. The dashed bar below it shows the selected baseline.
+- An incomplete overdue milestone is forecast for today, plus any entered delay.
 
 ### Milestone Diamonds
 Any activity with **`0` duration** or marked as a milestone automatically renders as a diamond on the Gantt timeline and Milestone Roadmap.
@@ -69,7 +81,7 @@ Any activity with **`0` duration** or marked as a milestone automatically render
 
 ## 4. Predecessor Dependencies & Lag Syntax
 
-In the **Predecessors** column, type predecessor links using WBS numbers, task indices, or task IDs:
+In the **Predecessors** column, type predecessor links using 1-based task positions, dotted WBS IDs, or task IDs. Numeric references resolve as task positions; dotted WBS references and task IDs are unambiguous:
 
 | Syntax | Dependency Type | Description |
 | :--- | :--- | :--- |
@@ -105,8 +117,9 @@ flowchart LR
 Toggle zoom levels between **Day** (44px/day), **Week** (28px/day), and **Month** (14px/day) in the Gantt toolbar.
 
 ### Drag-and-Drop Operations
-- **Shift Dates**: Click and drag the body of any colored task bar left or right to translate Start and Finish dates.
-- **Adjust Duration**: Click and drag the right edge handle of a task bar to extend or reduce duration in working days.
+- **Shift Projection**: Click and drag an unfinished task bar to adjust its projected start; predecessor constraints may move it later.
+- **Adjust Projected Duration**: Drag the right edge handle to change projected duration in working days. Baseline dates remain unchanged.
+- Gantt dependency connectors follow the selected dependency type and link to activities even when their parent summary is collapsed.
 
 ### Critical Path Toggle
 Check **Critical Path** in the Gantt toolbar to outline bottleneck tasks and dependency connector arrows in **bold red**.
@@ -143,8 +156,8 @@ Click **Calendar** in the top header:
 ## 8. Baseline Tracking & Delay Variance Badges
 
 1. When target schedule is finalized, click **Baseline** in the toolbar to save a baseline snapshot.
-2. If task dates slip, translucent **Baseline Ghost Bars** appear underneath current task bars on the Gantt timeline.
-3. Self-explaining **Variance Badges** display drift callouts (e.g. `+4d Delay`, `On Track`, `-2d Ahead`).
+2. Select a baseline in the header to display its dates in the Baseline Start/Finish columns. Dashed **Baseline Ghost Bars** appear underneath projected/actual Gantt bars.
+3. Self-explaining **Variance Badges** compare current actual dates (completed work) or projections (unfinished work) to the selected baseline (e.g. `+4d Delay`, `On Track`, `-2d Ahead`).
 
 ---
 

@@ -105,8 +105,11 @@ export class ResourceView {
         let maxFinish = null;
 
         tasks.forEach(t => {
-            if (t.start && (!minStart || t.start < minStart)) minStart = t.start;
-            if (t.finish && (!maxFinish || t.finish > maxFinish)) maxFinish = t.finish;
+            const complete = t.status === 'Complete' || Number(t.progress) >= 100;
+            const start = complete && t.actualStart ? t.actualStart : (t.projectedStart || t.start);
+            const finish = complete && t.actualFinish ? t.actualFinish : (t.projectedFinish || t.finish);
+            if (start && (!minStart || start < minStart)) minStart = start;
+            if (finish && (!maxFinish || finish > maxFinish)) maxFinish = finish;
         });
 
         const todayIso = new Date().toISOString().split('T')[0];
@@ -133,7 +136,10 @@ export class ResourceView {
         const workloadMap = new Map();
 
         tasks.forEach(task => {
-            if (!task.start || !task.finish) return;
+            const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+            const taskStart = complete && task.actualStart ? task.actualStart : (task.projectedStart || task.start);
+            const taskFinish = complete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.finish);
+            if (!taskStart || !taskFinish) return;
             const assigned = task.getAssignedResources();
             if (assigned.length === 0) return;
 
@@ -142,9 +148,9 @@ export class ResourceView {
                 if (!res) return;
 
                 const units = typeof a.units === 'number' ? a.units : 100;
-                let cur = task.start;
+                let cur = taskStart;
 
-                while (cur <= task.finish) {
+                while (cur <= taskFinish) {
                     const key = `${res.id}_${cur}`;
                     const currentLoad = workloadMap.get(key) || 0;
                     workloadMap.set(key, currentLoad + units);

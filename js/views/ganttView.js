@@ -16,7 +16,7 @@ export class GanttView {
         this.showBaselineGhost = true;
         this.dragState = null;
         this.dayWidth = 28;
-        this.rowHeight = 33;
+        this.rowHeight = 48;
         this.calendar = null;
         this.printMode = false;
         this.timelineWidth = 0;
@@ -31,7 +31,7 @@ export class GanttView {
         const bounds = this.getTimelineBounds(tasks);
         this.startDate = bounds.start;
         this.endDate = bounds.end;
-        this.totalDays = DependencyEngine.getWorkingDays(this.startDate, this.endDate, this.calendar) + 14;
+        this.totalDays = this.getCalendarDayCount(this.startDate, this.endDate);
 
         if (this.zoom === 'Day') this.dayWidth = 44;
         else if (this.zoom === 'Week') this.dayWidth = 28;
@@ -42,7 +42,7 @@ export class GanttView {
         const visibleTasks = this.getVisibleTasks(tasks);
 
         const html = `
-            <div class="gantt-container flex flex-col ${this.printMode ? '' : 'h-full overflow-hidden'} bg-white select-none">
+            <div class="gantt-container flex flex-col ${this.printMode ? '' : 'h-full min-h-0 overflow-hidden'} bg-white select-none">
                 <!-- Gantt Controls Toolbar -->
                 ${this.printMode ? '' : `<div class="gantt-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-2">
                     <!-- Zoom Controls -->
@@ -69,7 +69,7 @@ export class GanttView {
                 </div>`}
 
                 <!-- Timeline View Area -->
-                <div class="gantt-scroll-pane ${this.printMode ? '' : 'flex-1 overflow-auto'} relative bg-white">
+                <div class="gantt-scroll-pane ${this.printMode ? '' : 'flex-1 min-h-0 overflow-auto'} relative bg-white">
                     <div style="width: ${timelineWidth}px;" class="min-h-full relative">
                         <!-- Header Calendar Row -->
                         <div class="gantt-header ${this.printMode ? '' : 'sticky top-0 z-20'} bg-slate-100 border-b border-slate-300 font-medium text-slate-600 text-xs shadow-sm">
@@ -104,36 +104,21 @@ export class GanttView {
     }
 
     getTimelineBounds(tasks) {
-        let minDate = new Date();
-        let maxDate = new Date();
-        maxDate.setDate(maxDate.getDate() + 30);
-
-        if (tasks && tasks.length > 0) {
-            let first = true;
-            tasks.forEach(t => {
-                if (t.start) {
-                    const s = new Date(t.start);
-                    if (first || s < minDate) minDate = s;
-                }
-                if (t.finish) {
-                    const f = new Date(t.finish);
-                    if (first || f > maxDate) maxDate = f;
-                }
-                if (t.baseline && t.baseline.finish) {
-                    const bf = new Date(t.baseline.finish);
-                    if (bf > maxDate) maxDate = bf;
-                }
-                first = false;
-            });
-        }
-
-        minDate.setDate(minDate.getDate() - 5);
-        maxDate.setDate(maxDate.getDate() + 14);
-
+        const dates = [DependencyEngine.getLocalToday()];
+        (tasks || []).forEach(task => {
+            [task.start, task.finish, task.projectedStart, task.projectedFinish, task.actualStart, task.actualFinish,
+                task.baseline && task.baseline.start, task.baseline && task.baseline.finish]
+                .filter(Boolean).forEach(date => dates.push(date));
+        });
+        dates.sort();
         return {
-            start: minDate.toISOString().split('T')[0],
-            end: maxDate.toISOString().split('T')[0]
+            start: CalendarEngine.addCalendarDays(dates[0], -5),
+            end: CalendarEngine.addCalendarDays(dates[dates.length - 1], 14)
         };
+    }
+
+    getCalendarDayCount(start, end) {
+        return Math.max(1, Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1);
     }
 
     getVisibleTasks(tasks) {
@@ -161,7 +146,7 @@ export class GanttView {
         const monthsHtml = [];
         const daysHtml = [];
         
-        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
+        const totalDays = this.getCalendarDayCount(this.startDate, this.endDate) - 1;
         let currentMonth = '';
         let monthWidth = 0;
 
@@ -218,7 +203,7 @@ export class GanttView {
 
     renderGridLines(timelineWidth, rowCount) {
         const columns = [];
-        const totalDays = Math.round((new Date(this.endDate + 'T00:00:00Z') - new Date(this.startDate + 'T00:00:00Z')) / 86400000);
+        const totalDays = this.getCalendarDayCount(this.startDate, this.endDate) - 1;
 
         for (let i = 0; i <= totalDays; i++) {
             const dateStr = CalendarEngine.addCalendarDays(this.startDate, i);
@@ -248,7 +233,7 @@ export class GanttView {
     }
 
     renderTodayMarker(timelineWidth) {
-        const todayIso = new Date().toISOString().split('T')[0];
+        const todayIso = DependencyEngine.getLocalToday();
         if (todayIso >= this.startDate && todayIso <= this.endDate) {
             const todayX = this.dateToPixel(todayIso);
             if (todayX >= 0 && todayX <= timelineWidth) {
@@ -275,8 +260,11 @@ export class GanttView {
 
     renderTaskBar(task, rowIndex) {
         const y = rowIndex * this.rowHeight + 4;
-        const x = this.dateToPixel(task.start);
-        const finishX = this.dateToPixel(task.finish);
+        const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+        const forecastStart = complete && task.actualStart ? task.actualStart : (task.projectedStart || task.forecastStart || task.start);
+        const forecastFinish = complete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.forecastFinish || task.finish);
+        const x = this.dateToPixel(forecastStart);
+        const finishX = this.dateToPixel(forecastFinish);
         const width = Math.max(this.dayWidth, finishX - x + this.dayWidth);
         
         const ws = WORKSTREAMS[task.workstream] || WORKSTREAMS['HW'];
@@ -315,7 +303,7 @@ export class GanttView {
             const mx = x + this.dayWidth / 2 - 8;
             return `
                 ${baselineGhostHtml}
-                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${CalendarEngine.formatDate(task.start)})">
+                <div data-task-id="${task.id}" style="left: ${mx}px; top: ${y + 2}px;" class="gantt-milestone absolute cursor-move group z-20" title="${this.escapeHtml(task.name)} (${CalendarEngine.formatDate(forecastStart)})${task.isOverdue ? ` · Overdue ${task.overdueDays} days` : ''}">
                     <div class="milestone-diamond w-4 h-4 bg-amber-500 transform rotate-45 border-2 border-amber-600 shadow-sm transition-transform"></div>
                     <span class="absolute left-5 top-0 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
                         ◆ ${this.escapeHtml(task.name)}
@@ -342,7 +330,7 @@ export class GanttView {
         return `
             ${baselineGhostHtml}
             ${leadTimeHtml}
-            <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 is-critical-bar' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
+                <div data-task-id="${task.id}" title="${this.escapeHtml(task.name)} | ${this.escapeHtml(task.status || '')} | ${task.progress || 0}% complete | Forecast: ${CalendarEngine.formatDate(forecastStart)}–${CalendarEngine.formatDate(forecastFinish)}${task.isOverdue ? ` | Overdue ${task.overdueDays} days` : ''}" style="left: ${x}px; top: ${y}px; width: ${width}px; height: 22px; background-color: ${task.isOverdue && !isCritical ? '#dc2626' : barColor}; color: ${textColor};" class="gantt-task-bar absolute rounded shadow-sm border ${isCritical ? 'border-red-600 is-critical-bar' : 'border-black/10'} group cursor-move z-15 flex items-center text-[11px] font-medium px-2 select-none overflow-visible">
                 <div style="width: ${progressWidth};" class="absolute left-0 top-0 bottom-0 bg-black/25 rounded-l pointer-events-none"></div>
 
                 <span class="relative z-10 truncate text-[11px] font-medium">
@@ -363,15 +351,27 @@ export class GanttView {
     renderDependencies(visibleTasks) {
         const sfx = this.printMode ? '-print' : '';
         const taskRowIndexMap = new Map(visibleTasks.map((t, idx) => [t.id, idx]));
+        const taskById = new Map(this.tasks.map(task => [task.id, task]));
         const paths = [];
 
+        const getVisibleAnchor = task => {
+            let current = task;
+            while (current) {
+                if (taskRowIndexMap.has(current.id)) return current;
+                current = current.parentId ? taskById.get(current.parentId) : null;
+            }
+            return null;
+        };
+
         visibleTasks.forEach(task => {
-            const preds = DependencyEngine.parsePredecessors(task.predecessors, visibleTasks);
+            const preds = DependencyEngine.parsePredecessors(task.predecessors, this.tasks);
             preds.forEach(pred => {
                 const targetTask = pred.targetTask;
                 if (!targetTask) return;
+                const visibleTarget = getVisibleAnchor(targetTask);
+                if (!visibleTarget) return;
 
-                const fromIndex = taskRowIndexMap.get(targetTask.id);
+                const fromIndex = taskRowIndexMap.get(visibleTarget.id);
                 const toIndex = taskRowIndexMap.get(task.id);
 
                 if (fromIndex === undefined || toIndex === undefined) return;
@@ -379,8 +379,16 @@ export class GanttView {
                 const fromY = fromIndex * this.rowHeight + 15;
                 const toY = toIndex * this.rowHeight + 15;
 
-                const fromX = this.dateToPixel(targetTask.finish) + this.dayWidth;
-                const toX = this.dateToPixel(task.start);
+                const predComplete = targetTask.status === 'Complete' || Number(targetTask.progress) >= 100;
+                const predStart = predComplete && targetTask.actualStart ? targetTask.actualStart : (targetTask.projectedStart || targetTask.forecastStart || targetTask.start);
+                const predFinish = predComplete && targetTask.actualFinish ? targetTask.actualFinish : (targetTask.projectedFinish || targetTask.forecastFinish || targetTask.finish);
+                const taskComplete = task.status === 'Complete' || Number(task.progress) >= 100;
+                const taskStart = taskComplete && task.actualStart ? task.actualStart : (task.projectedStart || task.forecastStart || task.start);
+                const taskFinish = taskComplete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.forecastFinish || task.finish);
+                const fromStart = pred.type === 'SS' || pred.type === 'SF';
+                const toFinish = pred.type === 'FF' || pred.type === 'SF';
+                const fromX = this.dateToPixel(fromStart ? predStart : predFinish) + (fromStart ? 0 : this.dayWidth);
+                const toX = this.dateToPixel(toFinish ? taskFinish : taskStart) + (toFinish ? this.dayWidth : 0);
 
                 const isCritical = this.showCriticalPath && (task.isCritical && targetTask.isCritical);
                 const strokeColor = isCritical ? '#ef4444' : '#475569';
@@ -398,7 +406,7 @@ export class GanttView {
                 }
 
                 paths.push(`
-                    <path class="gantt-dep-line ${isCritical ? 'critical' : ''}" d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
+                    <path data-predecessor-id="${targetTask.id}" data-successor-id="${task.id}" class="gantt-dep-line ${isCritical ? 'critical' : ''}" d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>
                 `);
             });
         });
@@ -466,14 +474,14 @@ export class GanttView {
 
             activeTaskId = bar.getAttribute('data-task-id');
             const task = this.tasks.find(t => t.id === activeTaskId);
-            if (!task || task.isSummary) return;
+            if (!task || task.isSummary || task.status === 'Complete' || Number(task.progress) >= 100) return;
 
             isResizing = Boolean(handle);
             startMouseX = e.clientX;
-            initialTaskStart = task.start;
-            initialDuration = task.duration || 1;
+            initialTaskStart = task.projectedStart || task.forecastStart || task.plannedStart || task.start;
+            initialDuration = task.projectedDuration ?? task.duration ?? 1;
             draggedBarElement = bar;
-            initialX = parseFloat(bar.style.left) || this.dateToPixel(task.start);
+            initialX = parseFloat(bar.style.left) || this.dateToPixel(task.forecastStart || task.start);
             initialWidth = parseFloat(bar.style.width) || this.dayWidth;
 
             document.addEventListener('mousemove', onMouseMove);
@@ -506,14 +514,10 @@ export class GanttView {
                 if (task) {
                     if (isResizing) {
                         const newDuration = Math.max(1, initialDuration + deltaDays);
-                        task.duration = newDuration;
-                        task.finish = DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar);
+                        task.projectedDuration = newDuration;
                     } else if (deltaDays !== 0) {
-                        const newStart = this.pixelToDate(this.dateToPixel(initialTaskStart) + deltaPx);
-                        task.start = newStart;
-                        task.finish = task.duration > 0
-                            ? DependencyEngine.addWorkingDays(task.start, task.duration, this.calendar)
-                            : task.start;
+                        const newStart = CalendarEngine.addCalendarDays(initialTaskStart, deltaDays);
+                        task.projectedStartConstraint = CalendarEngine.nextWorkingDay(newStart, this.calendar);
                     }
                 }
 
