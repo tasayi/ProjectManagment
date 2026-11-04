@@ -68,7 +68,7 @@ export class MilestonesView {
         const ws = WORKSTREAMS[m.workstream] || WORKSTREAMS['HW'];
         const statusInfo = STATUS_PILLS[m.status] || STATUS_PILLS['Not Started'];
         const variance = BaselineEngine.getVariance(m);
-        const complete = m.status === 'Complete' || Number(m.progress) >= 100;
+        const complete = m.status === 'Complete';
         const targetStart = complete && m.actualStart ? m.actualStart : (m.projectedStart || m.forecastStart || m.start);
         const targetFinish = complete && m.actualFinish ? m.actualFinish : (m.projectedFinish || m.forecastFinish || m.finish);
 

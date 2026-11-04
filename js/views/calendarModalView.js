@@ -209,7 +209,7 @@ export class CalendarModalView {
             addHolidayBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-holiday-date');
                 const nameInput = this.container.querySelector('#new-holiday-name');
-                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                const iso = dateInput ? CalendarEngine.parseDisplayDate(dateInput.value) : null;
                 if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
                 if (iso && nameInput && nameInput.value.trim()) {
                     this.calendar.holidays.push({
@@ -236,7 +236,7 @@ export class CalendarModalView {
             addOvertimeBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-overtime-date');
                 const noteInput = this.container.querySelector('#new-overtime-note');
-                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                const iso = dateInput ? CalendarEngine.parseDisplayDate(dateInput.value) : null;
                 if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
                 if (iso && noteInput && noteInput.value.trim()) {
                     this.calendar.overtimeDays.push({

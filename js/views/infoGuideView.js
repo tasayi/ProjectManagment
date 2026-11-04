@@ -114,7 +114,7 @@ export class InfoGuideView {
                                     Bidirectional Gantt Chart Drag & Drop
                                 </h4>
                                 <p class="text-slate-600 leading-relaxed">
-                                    <strong>Baseline Start/Finish</strong> stay fixed while <strong>Projected Start/Finish</strong> recalculate from predecessor dates. Enter actual dates separately as work happens. The <strong>Delay (d)</strong> field shifts projections and dependent tasks; dragging a Gantt bar adjusts projections only. A new baseline uses actual dates for completed activities and projected dates otherwise.
+                                    <strong>Baseline Start/Finish</strong> stay fixed while <strong>Projected Start/Finish</strong> recalculate from predecessor dates. Enter actual dates separately as work happens. Signed <strong>Delay (d)</strong> values push dates later (+) or earlier (−) and update dependent forecasts. Percentage complete only colors the bar fill; it does not change dates or duration. Only Status <strong>Complete</strong> selects actual dates.
                                 </p>
                             </div>
 

@@ -8,12 +8,14 @@ import { BaselineEngine } from '../engine/baselineEngine.js';
 import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export class GanttView {
-    constructor(containerElement, onTaskUpdate) {
+    constructor(containerElement, onTaskUpdate, onViewChange = null) {
         this.container = containerElement;
         this.onTaskUpdate = onTaskUpdate;
+        this.onViewChange = onViewChange;
         this.zoom = 'Week';
         this.showCriticalPath = false;
         this.showBaselineGhost = true;
+        this.showDependencies = false;
         this.dragState = null;
         this.dayWidth = 28;
         this.rowHeight = 48;
@@ -62,6 +64,10 @@ export class GanttView {
                             <span class="${this.showCriticalPath ? 'text-red-700 font-bold' : ''}">Critical Path</span>
                         </label>
                         <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                            <input type="checkbox" id="toggle-dependencies" ${this.showDependencies ? 'checked' : ''} class="rounded text-slate-600 focus:ring-slate-500 w-3.5 h-3.5">
+                            <span>Dependencies</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
                             <input type="checkbox" id="toggle-baseline-ghost" ${this.showBaselineGhost ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5">
                             <span>Baseline Shadows</span>
                         </label>
@@ -86,7 +92,7 @@ export class GanttView {
 
                             <!-- Predecessor Connector Lines SVG -->
                             <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
-                                ${this.renderDependencies(visibleTasks)}
+                                ${this.showDependencies ? this.renderDependencies(visibleTasks) : ''}
                             </svg>
 
                             <!-- Task Bars Layer -->
@@ -238,7 +244,7 @@ export class GanttView {
             const todayX = this.dateToPixel(todayIso);
             if (todayX >= 0 && todayX <= timelineWidth) {
                 return `
-                    <div style="left: ${todayX + this.dayWidth / 2}px;" class="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-25 pointer-events-none" title="Today (${todayIso})">
+                    <div style="left: ${todayX + this.dayWidth / 2}px;" class="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-25 pointer-events-none" title="Today (${CalendarEngine.formatDate(todayIso)})">
                         <div class="sticky top-0 -ml-3.5 px-1 py-0.5 bg-rose-600 text-white text-[9px] font-bold rounded-b shadow-xs uppercase tracking-wider text-center">Today</div>
                     </div>
                 `;
@@ -260,7 +266,7 @@ export class GanttView {
 
     renderTaskBar(task, rowIndex) {
         const y = rowIndex * this.rowHeight + 4;
-        const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+        const complete = task.status === 'Complete';
         const forecastStart = complete && task.actualStart ? task.actualStart : (task.projectedStart || task.forecastStart || task.start);
         const forecastFinish = complete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.forecastFinish || task.finish);
         const x = this.dateToPixel(forecastStart);
@@ -379,10 +385,10 @@ export class GanttView {
                 const fromY = fromIndex * this.rowHeight + 15;
                 const toY = toIndex * this.rowHeight + 15;
 
-                const predComplete = targetTask.status === 'Complete' || Number(targetTask.progress) >= 100;
+                const predComplete = targetTask.status === 'Complete';
                 const predStart = predComplete && targetTask.actualStart ? targetTask.actualStart : (targetTask.projectedStart || targetTask.forecastStart || targetTask.start);
                 const predFinish = predComplete && targetTask.actualFinish ? targetTask.actualFinish : (targetTask.projectedFinish || targetTask.forecastFinish || targetTask.finish);
-                const taskComplete = task.status === 'Complete' || Number(task.progress) >= 100;
+                const taskComplete = task.status === 'Complete';
                 const taskStart = taskComplete && task.actualStart ? task.actualStart : (task.projectedStart || task.forecastStart || task.start);
                 const taskFinish = taskComplete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.forecastFinish || task.finish);
                 const fromStart = pred.type === 'SS' || pred.type === 'SF';
@@ -430,7 +436,7 @@ export class GanttView {
         this.container.querySelectorAll('[data-zoom]').forEach(btn => {
             btn.onclick = () => {
                 this.zoom = btn.getAttribute('data-zoom');
-                this.render(this.tasks, this.calendar);
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
             };
         });
 
@@ -438,7 +444,7 @@ export class GanttView {
         if (cpToggle) {
             cpToggle.onchange = (e) => {
                 this.showCriticalPath = e.target.checked;
-                this.render(this.tasks, this.calendar);
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
             };
         }
 
@@ -446,7 +452,15 @@ export class GanttView {
         if (bgToggle) {
             bgToggle.onchange = (e) => {
                 this.showBaselineGhost = e.target.checked;
-                this.render(this.tasks, this.calendar);
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
+            };
+        }
+
+        const dependencyToggle = this.container.querySelector('#toggle-dependencies');
+        if (dependencyToggle) {
+            dependencyToggle.onchange = (e) => {
+                this.showDependencies = e.target.checked;
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
             };
         }
 
@@ -474,7 +488,7 @@ export class GanttView {
 
             activeTaskId = bar.getAttribute('data-task-id');
             const task = this.tasks.find(t => t.id === activeTaskId);
-            if (!task || task.isSummary || task.status === 'Complete' || Number(task.progress) >= 100) return;
+            if (!task || task.isSummary || task.status === 'Complete') return;
 
             isResizing = Boolean(handle);
             startMouseX = e.clientX;

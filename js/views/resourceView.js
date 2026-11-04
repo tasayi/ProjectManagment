@@ -105,7 +105,7 @@ export class ResourceView {
         let maxFinish = null;
 
         tasks.forEach(t => {
-            const complete = t.status === 'Complete' || Number(t.progress) >= 100;
+            const complete = t.status === 'Complete';
             const start = complete && t.actualStart ? t.actualStart : (t.projectedStart || t.start);
             const finish = complete && t.actualFinish ? t.actualFinish : (t.projectedFinish || t.finish);
             if (start && (!minStart || start < minStart)) minStart = start;
@@ -136,7 +136,7 @@ export class ResourceView {
         const workloadMap = new Map();
 
         tasks.forEach(task => {
-            const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+            const complete = task.status === 'Complete';
             const taskStart = complete && task.actualStart ? task.actualStart : (task.projectedStart || task.start);
             const taskFinish = complete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.finish);
             if (!taskStart || !taskFinish) return;

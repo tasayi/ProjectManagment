@@ -13,7 +13,7 @@ export class BaselineEngine {
         const date = new Date().toISOString();
 
         tasks.forEach(t => {
-            const completed = t.status === 'Complete' || Number(t.progress) >= 100;
+            const completed = t.status === 'Complete';
             const baselineStart = completed
                 ? (t.actualStart || t.projectedStart || t.forecastStart || t.start)
                 : (t.projectedStart || t.forecastStart || t.start);
@@ -93,12 +93,12 @@ export class BaselineEngine {
     }
 
     static getCurrentStart(task) {
-        const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+        const complete = task.status === 'Complete';
         return complete ? (task.actualStart || task.projectedStart || task.start) : (task.projectedStart || task.start);
     }
 
     static getCurrentFinish(task) {
-        const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+        const complete = task.status === 'Complete';
         return complete ? (task.actualFinish || task.projectedFinish || task.finish) : (task.projectedFinish || task.finish);
     }
 

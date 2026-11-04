@@ -22,7 +22,7 @@ export class Task {
         this.projectedDuration = typeof data.projectedDuration === 'number' ? data.projectedDuration : this.duration;
         this.predecessors = data.predecessors || ''; // e.g. "2FS+3d, 4SS"
         this.progress = typeof data.progress === 'number' ? data.progress : 0; // 0 to 100
-        this.delayDays = Math.max(0, parseInt(data.delayDays, 10) || 0); // Manually recorded schedule delay in working days
+        this.delayDays = Math.max(-3650, Math.min(3650, parseInt(data.delayDays, 10) || 0)); // Signed schedule shift in working days
         
         // Metadata & Workstreams
         this.stage = data.stage || 'EVT'; // Concept, EVT, DVT, PVT, MP, or custom

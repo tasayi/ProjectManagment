@@ -86,11 +86,11 @@ export class DependencyEngine {
         if (!predStr || typeof predStr !== 'string') return [];
         
         const wbsMap = new Map();
-        tasks.forEach((t, idx) => wbsMap.set((idx + 1).toString(), t));
         tasks.forEach(t => {
-            if (t.wbs && t.wbs.includes('.')) wbsMap.set(t.wbs, t);
-            wbsMap.set(t.id, t);
+            if (t.wbs) wbsMap.set(String(t.wbs), t);
         });
+        const idMap = new Map(tasks.map(task => [task.id, task]));
+        const positionMap = new Map(tasks.map((task, index) => [(index + 1).toString(), task]));
 
         const items = predStr.split(',').map(s => s.trim()).filter(Boolean);
         const results = [];
@@ -103,7 +103,7 @@ export class DependencyEngine {
                 const sign = match[3] === '-' ? -1 : 1;
                 const lag = match[4] ? parseInt(match[4], 10) * sign : 0;
 
-                const targetTask = wbsMap.get(targetRef);
+                const targetTask = wbsMap.get(targetRef) || idMap.get(targetRef) || positionMap.get(targetRef);
                 if (targetTask) {
                     results.push({
                         targetTask,
@@ -132,7 +132,7 @@ export class DependencyEngine {
     static calculateForecast(tasks, calendar) {
         const today = this.getLocalToday();
         const leaves = tasks.filter(task => !task.isSummary);
-        const isComplete = task => task.status === 'Complete' || Number(task.progress) >= 100;
+        const isComplete = task => task.status === 'Complete';
 
         leaves.forEach(task => {
             const plannedStart = task.plannedStart || task.start;
@@ -140,7 +140,6 @@ export class DependencyEngine {
             const completed = isComplete(task);
             const overdue = !completed && plannedFinish && plannedFinish < today;
             const duration = Math.max(0, Number(task.projectedDuration ?? task.duration) || 0);
-            const progress = Math.max(0, Math.min(100, Number(task.progress) || 0));
             task.isOverdue = Boolean(overdue);
             task.overdueDays = overdue
                 ? Math.max(1, Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${plannedFinish}T00:00:00Z`)) / 86400000))
@@ -148,9 +147,8 @@ export class DependencyEngine {
             task._projectionBaseStart = completed
                 ? (task.actualStart || plannedStart || today)
                 : (task.actualStart || task.projectedStartConstraint || plannedStart || today);
-            task._projectionDuration = !completed && overdue && duration > 0
-                ? Math.max(1, Math.ceil(duration * (100 - progress) / 100))
-                : duration;
+            // Progress is only a visual indicator; forecasts always use the scheduled duration.
+            task._projectionDuration = duration;
 
             if (completed) {
                 task.projectedStart = task.actualStart || plannedStart;
@@ -182,7 +180,7 @@ export class DependencyEngine {
             if (completed) return;
             let start = CalendarEngine.nextWorkingDay(task._projectionBaseStart, calendar);
             if (!completed && task.isOverdue && today > start) start = CalendarEngine.nextWorkingDay(today, calendar);
-            if (!completed && task.delayDays > 0) start = CalendarEngine.shiftWorkingDays(start, task.delayDays, calendar);
+            if (!completed && task.delayDays !== 0) start = CalendarEngine.shiftWorkingDays(start, task.delayDays, calendar);
             task.projectedStart = start;
             task.projectedFinish = task._projectionDuration > 0
                 ? CalendarEngine.addWorkingDays(start, task._projectionDuration, calendar)
@@ -201,7 +199,8 @@ export class DependencyEngine {
                 const duration = task._projectionDuration;
                 const spanBack = Math.max(0, duration - 1);
                 const completed = isComplete(task);
-                let requiredStart = task._projectionBaseStart;
+                let baseStart = CalendarEngine.nextWorkingDay(task._projectionBaseStart, calendar);
+                let dependencyStart = '';
                 const links = this.parsePredecessors(task.predecessors, tasks)
                     .filter(link => link.targetTask && link.targetTask !== task);
 
@@ -230,18 +229,29 @@ export class DependencyEngine {
                         default:
                             candidate = CalendarEngine.shiftWorkingDays(predFinish, 1 + link.lag, calendar);
                     }
-                    if (candidate > requiredStart) requiredStart = candidate;
+                    if (!dependencyStart || candidate > dependencyStart) dependencyStart = candidate;
                 });
 
-                if (!completed && task.isOverdue && today > requiredStart) requiredStart = today;
-                let start = CalendarEngine.nextWorkingDay(requiredStart, calendar);
-                if (!completed && task.delayDays > 0) start = CalendarEngine.shiftWorkingDays(start, task.delayDays, calendar);
+                if (!completed && task.isOverdue && today > baseStart) baseStart = CalendarEngine.nextWorkingDay(today, calendar);
+
+                let start;
+                if (task.delayDays < 0) {
+                    const advancedStart = CalendarEngine.shiftWorkingDays(baseStart, task.delayDays, calendar);
+                    start = dependencyStart && dependencyStart > advancedStart
+                        ? CalendarEngine.nextWorkingDay(dependencyStart, calendar)
+                        : CalendarEngine.nextWorkingDay(advancedStart, calendar);
+                } else {
+                    const earliestStart = dependencyStart && dependencyStart > baseStart ? dependencyStart : baseStart;
+                    start = task.delayDays > 0
+                        ? CalendarEngine.shiftWorkingDays(earliestStart, task.delayDays, calendar)
+                        : CalendarEngine.nextWorkingDay(earliestStart, calendar);
+                }
                 let finish = duration > 0 ? CalendarEngine.addWorkingDays(start, duration, calendar) : start;
 
                 // Keep the baseline finish as a lower bound unless the user explicitly adjusted the projection.
                 const hasProjectionOverride = Boolean(task.projectedStartConstraint) || task.projectedDuration !== task.duration;
                 const baselineFinish = task.plannedFinish || task.finish;
-                if (!completed && !task.isOverdue && !hasProjectionOverride && !task.delayDays && baselineFinish && finish < baselineFinish) {
+                if (!completed && !task.isOverdue && !hasProjectionOverride && task.delayDays === 0 && baselineFinish && finish < baselineFinish) {
                     finish = baselineFinish;
                 }
 

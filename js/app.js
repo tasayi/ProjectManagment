@@ -72,7 +72,11 @@ class ProjectManagementApp {
         const streamModalContainer = document.getElementById('stream-modal-container');
 
         this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
-        this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
+        this.ganttView = new GanttView(
+            ganttContainer,
+            (taskId) => this.handleGanttUpdate(taskId),
+            () => this.renderAllViews()
+        );
         this.milestonesView = new MilestonesView(milestonesContainer);
         this.deptreeView = new DependencyTreeView(deptreeContainer);
         this.infoGuideView = new InfoGuideView(infoGuideContainer);
@@ -314,6 +318,9 @@ class ProjectManagementApp {
 
             this.tasks.splice(insertIndex, 0, newTask);
             this.selectedTaskId = newTask.id;
+        } else if (actionOrField === 'toggle-expand' && taskId) {
+            const task = this.tasks.find(item => item.id === taskId);
+            if (task) task.expanded = !task.expanded;
         } else if (actionOrField === 'indent' && taskId) {
             this.indentTask(taskId);
         } else if (actionOrField === 'outdent' && taskId) {

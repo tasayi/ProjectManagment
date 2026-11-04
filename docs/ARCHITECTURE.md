@@ -67,7 +67,8 @@ The `Task` class represents individual activities, summary tasks, and milestones
    - `plannedStart`, `plannedFinish`: Current baseline planning anchor, updated when a new baseline is captured.
    - `projectedStart`, `projectedFinish`: Recomputed current schedule dates.
    - `actualStart`, `actualFinish`: User-entered execution dates.
-   - `delayDays`: User-entered additional delay in working days.
+   - `delayDays`: Signed user-entered schedule offset in working days; positive delays and negative advances.
+   - `progress`: Visual completion percentage used for chart fill and summary progress only; it is not used to calculate dates or duration.
    - `forecastStart`, `forecastFinish`: Backward-compatible aliases for the projected date fields.
    - `isOverdue`, `overdueDays`: Date-derived indicators for incomplete tasks whose planned finish is before local today.
   - `predecessors`: Dependency string (e.g. `1FS+2d, 3SS`).
@@ -120,7 +121,8 @@ Replaces naive weekend skipping with dynamic calendar evaluation:
      - **FF (Finish-to-Finish)**: $\text{Finish} = \text{Pred.Finish} + \text{Lag} \implies \text{Start} = \text{Finish} - \text{Duration}$
      - **SF (Start-to-Finish)**: $\text{Finish} = \text{Pred.Start} + \text{Lag} \implies \text{Start} = \text{Finish} - \text{Duration}$
 4. **Overdue Forecast and Actual Predecessors**:
-   - Incomplete activities with planned finish before local today project from today using remaining duration estimated from duration/progress; manual delay days are applied.
+   - Incomplete activities with planned finish before local today project from today using the full scheduled duration; signed manual delay days are applied. Progress is visual only and never feeds schedule calculations.
+   - Only `status === 'Complete'` selects actual dates for scheduling; percentage complete does not change task dates, durations, dependencies, or completion behavior.
    - Successors use an actual predecessor date when entered for completed work, otherwise projected dates. FS/SS/FF/SF constraints and summary rollups use the project calendar.
 5. **Critical Path Method (CPM Backward Pass)**:
    - Computes float/slack. Tasks on the project path with zero float or driving the project finish date are flagged as `isCritical = true`.
@@ -148,6 +150,7 @@ Replaces naive weekend skipping with dynamic calendar evaluation:
 - **Baseline Shadow Ghost Bars**: Translucent shadow bars rendered below active task bars.
 - **Projected/actual & overdue**: Bars show actual dates for completed tasks when recorded and projected dates otherwise; baseline shadows remain separate.
 - **Projection-only Drag & Drop**: Drag/resize writes projection constraints/duration, never selected-baseline dates. Timeline bounds include today and both selected-baseline endpoints.
+- **Dependency visibility**: Connectors are hidden by default and controlled independently from critical-path highlighting.
 
 ### Resource View (`js/views/resourceView.js`)
 - Team Engineer Pool table + 21-day Fractional Workload Heatmap matrix.

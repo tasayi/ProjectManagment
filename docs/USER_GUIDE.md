@@ -61,17 +61,18 @@ The top header bar provides instant access to project management controls:
 1. Click **Add Activity** in the Grid toolbar to insert a new activity. The new task automatically inherits the **hierarchy level** (parent ID), stage, and workstream of the currently selected row, inserted directly below it.
 2. Select a row and click **Indent** to indent the activity underneath the previous row, turning the parent row into a **Summary Task**.
 3. Click **Outdent** to promote a subtask up one hierarchy level.
-4. Enter additional schedule slip in **Delay (d)**. The value is in working days and pushes the forecast for that activity and its dependent activities without changing planned dates or baseline snapshots.
+4. Enter a signed working-day offset in **Delay (d)**. Positive values delay the forecast; negative values advance it. The offset recalculates the activity and dependent forecasts without changing planned dates or baseline snapshots.
 5. Select an activity and click **Notes** to add or edit notes. A notes icon appears next to its WBS number after notes are saved; click the icon to edit them later.
 
 The **WBS** and **Activity Name** columns stay visible while scrolling the activity grid horizontally. The Gantt and activity rows scroll vertically together. When editing an input, press **Enter** to save it and move to the next activity in the same column.
 
 ### Forecast, overdue activities, and baselines
 - **Baseline Start/Finish** show the selected saved baseline and do not move when delays or dependencies change.
-- **Projected Start/Finish** are calculated from the activity's baseline start, predecessor links, delay, progress, and project calendar. An overdue activity is incomplete (not **Complete** and below 100%) with its latest planned finish before today; it is reforecast from today using estimated remaining duration.
-- **Actual Start/Finish** are entered separately when dates are known. Completed predecessors use their actual dates when present; downstream projected dates then recalculate.
+- **Projected Start/Finish** are calculated from the activity's baseline start, predecessor links, signed Delay (d), and project calendar. Progress (%) is only an indicative Gantt fill and never changes forecast dates or duration. An activity is considered complete for scheduling only when its Status is **Complete**.
+- An overdue, incomplete activity with a planned finish before today is forecast from today using its full scheduled duration, not a duration inferred from the progress percentage.
+- **Actual Start/Finish** are entered separately in **DD/MM/YYYY** format when dates are known. Completed predecessors use their actual dates when present; downstream projected dates then recalculate.
 - When capturing a new baseline, completed activities use actual dates (or projected dates if actuals are missing), and unfinished activities use projected dates. The new snapshot becomes the dates shown in Baseline Start/Finish. Selecting an older baseline changes that display but does not rewrite the current projection inputs.
-- Gantt bars show actual dates for completed activities when entered, otherwise projected dates. Dragging or resizing an unfinished bar adjusts the projection only. The dashed bar below it shows the selected baseline.
+- Gantt bars show actual dates for activities with **Complete** status when entered, otherwise projected dates. The progress fill reflects the entered percentage only. Dragging or resizing an unfinished bar adjusts the projection only. The dashed bar below it shows the selected baseline.
 - An incomplete overdue milestone is forecast for today, plus any entered delay.
 
 ### Milestone Diamonds
@@ -81,7 +82,7 @@ Any activity with **`0` duration** or marked as a milestone automatically render
 
 ## 4. Predecessor Dependencies & Lag Syntax
 
-In the **Predecessors** column, type predecessor links using 1-based task positions, dotted WBS IDs, or task IDs. Numeric references resolve as task positions; dotted WBS references and task IDs are unambiguous:
+In the **Predecessors** column, type predecessor links using WBS IDs or task IDs. Numeric references resolve to an exact WBS first (so `4` means WBS `4`); if no matching WBS exists, the legacy 1-based row-position fallback is used. Dotted WBS IDs and task IDs are also supported:
 
 | Syntax | Dependency Type | Description |
 | :--- | :--- | :--- |
@@ -115,6 +116,7 @@ flowchart LR
 
 ### Timeline Controls & Zoom
 Toggle zoom levels between **Day** (44px/day), **Week** (28px/day), and **Month** (14px/day) in the Gantt toolbar.
+Use the **Dependencies** checkbox to show or hide link arrows; arrows are hidden by default. This is independent of the **Critical Path** toggle.
 
 ### Drag-and-Drop Operations
 - **Shift Projection**: Click and drag an unfinished task bar to adjust its projected start; predecessor constraints may move it later.
@@ -148,8 +150,8 @@ Switch to the **Engineer Workload** tab:
 Click **Calendar** in the top header:
 
 1. **Weekly Working Days**: Check standard working days (e.g. Mon–Fri for 5-day week, or Mon–Sat for 6-day week).
-2. **Festive & Company Holidays**: Enter Date and Holiday Name (e.g., `2026-10-02: Gandhi Jayanti`) and click **+ Add Holiday**. Tasks automatically skip holiday dates.
-3. **Overtime Working Days**: Enter Date and Note (e.g., `2026-10-10: EVT Crunch Saturday`) and click **+ Add Overtime**. Engine treats overtime dates as active working days.
+2. **Festive & Company Holidays**: Enter Date as **DD/MM/YYYY** and Holiday Name (e.g., `02/10/2026: Gandhi Jayanti`) and click **+ Add Holiday**. Tasks automatically skip holiday dates.
+3. **Overtime Working Days**: Enter Date as **DD/MM/YYYY** and Note (e.g., `10/10/2026: EVT Crunch Saturday`) and click **+ Add Overtime**. Engine treats overtime dates as active working days.
 
 ---
 

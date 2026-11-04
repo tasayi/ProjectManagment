@@ -160,8 +160,8 @@ export class WbsGridView {
                             ${this.visibleColumns.assignedTo ? `<col data-col="assignedTo" style="width: ${this.columnWidths.assignedTo}px;">` : ''}
                             ${this.visibleColumns.status ? `<col data-col="status" style="width: ${this.columnWidths.status}px;">` : ''}
                             ${this.visibleColumns.duration ? `<col data-col="duration" style="width: ${this.columnWidths.duration}px;">` : ''}
-                            ${this.visibleColumns.delayDays ? `<col data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;">` : ''}
                             ${this.visibleColumns.progress ? `<col data-col="progress" style="width: ${this.columnWidths.progress}px;">` : ''}
+                            ${this.visibleColumns.delayDays ? `<col data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;">` : ''}
                             ${this.visibleColumns.leadTime ? `<col data-col="leadTime" style="width: ${this.columnWidths.leadTime}px;">` : ''}
                             ${this.visibleColumns.dates ? `<col data-col="start" style="width: ${this.columnWidths.start}px;">` : ''}
                             ${this.visibleColumns.dates ? `<col data-col="finish" style="width: ${this.columnWidths.finish}px;">` : ''}
@@ -212,16 +212,16 @@ export class WbsGridView {
                                         <div class="col-resizer" data-col="duration" title="Drag to resize column (double-click to reset)"></div>
                                     </th>
                                 ` : ''}
-                                ${this.visibleColumns.delayDays ? `
-                                    <th data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Additional delay to apply to the activity forecast, in working days">
-                                        <span>Delay (d)</span>
-                                        <div class="col-resizer" data-col="delayDays" title="Drag to resize column (double-click to reset)"></div>
-                                    </th>
-                                ` : ''}
                                 ${this.visibleColumns.progress ? `
-                                    <th data-col="progress" style="width: ${this.columnWidths.progress}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Work completed">
+                                    <th data-col="progress" style="width: ${this.columnWidths.progress}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Visual progress indicator; does not affect projected dates">
                                         <span>Done %</span>
                                         <div class="col-resizer" data-col="progress" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.delayDays ? `
+                                    <th data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Signed schedule shift: positive delays, negative advances, in working days">
+                                        <span>Delay (d)</span>
+                                        <div class="col-resizer" data-col="delayDays" title="Drag to resize column (double-click to reset)"></div>
                                     </th>
                                 ` : ''}
                                 ${this.visibleColumns.leadTime ? `
@@ -416,7 +416,7 @@ export class WbsGridView {
                     <!-- Activity Delay -->
                     ${this.visibleColumns.delayDays ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
-                            <input type="number" min="0" max="3650" data-field="delayDays" data-id="${t.id}" value="${t.delayDays || 0}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-rose-200 bg-rose-50/50 rounded py-0.5 text-xs focus:outline-none"'} title="Extra delay in working days; downstream forecast dates will move">
+                            <input type="number" min="-3650" max="3650" step="1" data-field="delayDays" data-id="${t.id}" value="${t.delayDays || 0}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-rose-200 bg-rose-50/50 rounded py-0.5 text-xs focus:outline-none"'} title="Signed working-day shift: positive delays; negative advances. This controls projected dates.">
                         </td>
                     ` : ''}
 
@@ -444,8 +444,8 @@ export class WbsGridView {
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" value="${CalendarEngine.formatDate(t.projectedStart)}" title="Calculated projected start" disabled class="w-full bg-indigo-50 text-indigo-800 rounded py-0.5 px-0 text-[11px] text-center font-mono"></td>
                         <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" value="${CalendarEngine.formatDate(t.projectedFinish)}" title="Calculated projected finish" disabled class="w-full bg-indigo-50 text-indigo-800 rounded py-0.5 px-0 text-[11px] text-center font-mono"></td>
-                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="date" data-field="actualStart" data-id="${t.id}" value="${t.actualStart || ''}" ${t.isSummary ? 'disabled' : ''} title="Actual start (enter when known)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
-                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="date" data-field="actualFinish" data-id="${t.id}" value="${t.actualFinish || ''}" ${t.isSummary ? 'disabled' : ''} title="Actual finish (enter when known)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" data-field="actualStart" data-id="${t.id}" value="${CalendarEngine.formatDate(t.actualStart)}" ${t.isSummary ? 'disabled' : ''} title="Actual start (DD/MM/YYYY)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" data-field="actualFinish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.actualFinish)}" ${t.isSummary ? 'disabled' : ''} title="Actual finish (DD/MM/YYYY)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
                     ` : ''}
 
                     <!-- Predecessors -->
@@ -473,7 +473,7 @@ export class WbsGridView {
 
         this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
             element.addEventListener('keydown', event => {
-                if (element.tagName !== 'INPUT' || event.key !== 'Enter' || event.isComposing || event.shiftKey) return;
+                if (!['INPUT', 'SELECT'].includes(element.tagName) || event.key !== 'Enter' || event.isComposing || event.shiftKey) return;
                 event.preventDefault();
                 event.stopPropagation();
                 const field = element.getAttribute('data-field');
@@ -564,8 +564,7 @@ export class WbsGridView {
                 const id = btn.getAttribute('data-id');
                 const task = this.tasks.find(t => t.id === id);
                 if (task) {
-                    task.expanded = !task.expanded;
-                    this.render(this.tasks, this.resources);
+                    if (this.onTaskChange) this.onTaskChange(id, 'toggle-expand');
                 }
             });
         });
@@ -620,13 +619,15 @@ export class WbsGridView {
                 }
 
                 if (field === 'actualStart' || field === 'actualFinish') {
-                    value = value ? CalendarEngine.parseDate(value) : '';
-                    if (element.value && !value) {
+                    const inputText = value.trim();
+                    value = inputText ? CalendarEngine.parseDisplayDate(inputText) : '';
+                    if (inputText && !value) {
+                        alert('Enter a valid date in DD/MM/YYYY format.');
                         this.render(this.tasks, this.resources);
                         return;
                     }
                 } else if (field === 'start') {
-                    value = CalendarEngine.parseDate(value);
+                    value = CalendarEngine.parseDisplayDate(value);
                     if (!value) {
                         this.render(this.tasks, this.resources);
                         return;
@@ -636,7 +637,7 @@ export class WbsGridView {
                 if (field === 'duration' || field === 'leadTime' || field === 'progress' || field === 'delayDays') {
                     value = parseInt(value, 10) || 0;
                     if (field === 'progress') value = Math.max(0, Math.min(100, value));
-                    if (field === 'delayDays') value = Math.max(0, Math.min(3650, value));
+                    if (field === 'delayDays') value = Math.max(-3650, Math.min(3650, value));
                 }
 
                 if (this.onTaskChange) {
@@ -657,20 +658,6 @@ export class WbsGridView {
                     } else {
                         picker.focus();
                         picker.click();
-                    }
-                }
-            };
-        });
-
-        this.container.querySelectorAll('input[data-picker-for]').forEach(picker => {
-            picker.onchange = (e) => {
-                const id = picker.getAttribute('data-picker-for');
-                const iso = e.target.value;
-                if (iso) {
-                    const textInput = this.container.querySelector(`input[data-field="start"][data-id="${id}"]`);
-                    if (textInput) textInput.value = CalendarEngine.formatDate(iso);
-                    if (this.onTaskChange) {
-                        this.onTaskChange(id, 'start', iso);
                     }
                 }
             };

@@ -15,7 +15,7 @@
 - **Summary Task Auto-Aggregation**: Parent activities roll up projected date bounds and weighted progress from child activities; baseline snapshots remain separate.
 - **Milestone Diamonds**: Tasks with `0` duration automatically render as milestone diamonds.
 - **Inline Spreadsheet Editing**: Edit Activity Name, Stage, Workstream, Status, Duration, Start Date, Predecessors, Vendor, and Lead Time directly in table cells.
-- **Separate Date Tracking**: Baseline Start/Finish remain stable, projected dates recalculate from predecessor links and delays, and actual dates are entered independently.
+- **Separate Date Tracking**: Baseline Start/Finish remain stable, projected dates recalculate from predecessor links and signed working-day offsets, and actual dates are entered independently. Progress percentage is visual only and does not change forecast dates.
 - **Long-Schedule Navigation**: WBS and Activity Name stay fixed during horizontal scrolling, Grid and Gantt vertical scrolling stay synchronized, and Enter advances editing to the next activity in the same column.
 
 ### 📊 Bidirectional Interactive Gantt Chart

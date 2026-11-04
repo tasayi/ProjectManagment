@@ -423,7 +423,7 @@ class Task {
         this.projectedDuration = typeof data.projectedDuration === 'number' ? data.projectedDuration : this.duration;
         this.predecessors = data.predecessors || ''; // e.g. "2FS+3d, 4SS"
         this.progress = typeof data.progress === 'number' ? data.progress : 0; // 0 to 100
-        this.delayDays = Math.max(0, parseInt(data.delayDays, 10) || 0); // Manually recorded schedule delay in working days
+        this.delayDays = Math.max(-3650, Math.min(3650, parseInt(data.delayDays, 10) || 0)); // Signed schedule shift in working days
         
         // Metadata & Workstreams
         this.stage = data.stage || 'EVT'; // Concept, EVT, DVT, PVT, MP, or custom
@@ -793,6 +793,14 @@ class CalendarEngine {
         return dt.toISOString().split('T')[0];
     }
 
+    /** Parse a user-entered DD/MM/YYYY date without locale-dependent interpretation. */
+    static parseDisplayDate(str) {
+        const match = /^([0-3]\d)\/([0-1]\d)\/(\d{4})$/.exec((str || '').trim());
+        if (!match) return null;
+        const [, day, month, year] = match;
+        return this.parseDate(`${year}-${month}-${day}`);
+    }
+
     static addCalendarDays(dateStr, n) {
         const d = new Date(dateStr + 'T00:00:00Z');
         d.setUTCDate(d.getUTCDate() + n);
@@ -940,11 +948,11 @@ class DependencyEngine {
         if (!predStr || typeof predStr !== 'string') return [];
         
         const wbsMap = new Map();
-        tasks.forEach((t, idx) => wbsMap.set((idx + 1).toString(), t));
         tasks.forEach(t => {
-            if (t.wbs && t.wbs.includes('.')) wbsMap.set(t.wbs, t);
-            wbsMap.set(t.id, t);
+            if (t.wbs) wbsMap.set(String(t.wbs), t);
         });
+        const idMap = new Map(tasks.map(task => [task.id, task]));
+        const positionMap = new Map(tasks.map((task, index) => [(index + 1).toString(), task]));
 
         const items = predStr.split(',').map(s => s.trim()).filter(Boolean);
         const results = [];
@@ -957,7 +965,7 @@ class DependencyEngine {
                 const sign = match[3] === '-' ? -1 : 1;
                 const lag = match[4] ? parseInt(match[4], 10) * sign : 0;
 
-                const targetTask = wbsMap.get(targetRef);
+                const targetTask = wbsMap.get(targetRef) || idMap.get(targetRef) || positionMap.get(targetRef);
                 if (targetTask) {
                     results.push({
                         targetTask,
@@ -986,7 +994,7 @@ class DependencyEngine {
     static calculateForecast(tasks, calendar) {
         const today = this.getLocalToday();
         const leaves = tasks.filter(task => !task.isSummary);
-        const isComplete = task => task.status === 'Complete' || Number(task.progress) >= 100;
+        const isComplete = task => task.status === 'Complete';
 
         leaves.forEach(task => {
             const plannedStart = task.plannedStart || task.start;
@@ -994,7 +1002,6 @@ class DependencyEngine {
             const completed = isComplete(task);
             const overdue = !completed && plannedFinish && plannedFinish < today;
             const duration = Math.max(0, Number(task.projectedDuration ?? task.duration) || 0);
-            const progress = Math.max(0, Math.min(100, Number(task.progress) || 0));
             task.isOverdue = Boolean(overdue);
             task.overdueDays = overdue
                 ? Math.max(1, Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${plannedFinish}T00:00:00Z`)) / 86400000))
@@ -1002,9 +1009,8 @@ class DependencyEngine {
             task._projectionBaseStart = completed
                 ? (task.actualStart || plannedStart || today)
                 : (task.actualStart || task.projectedStartConstraint || plannedStart || today);
-            task._projectionDuration = !completed && overdue && duration > 0
-                ? Math.max(1, Math.ceil(duration * (100 - progress) / 100))
-                : duration;
+            // Progress is only a visual indicator; forecasts always use the scheduled duration.
+            task._projectionDuration = duration;
 
             if (completed) {
                 task.projectedStart = task.actualStart || plannedStart;
@@ -1036,7 +1042,7 @@ class DependencyEngine {
             if (completed) return;
             let start = CalendarEngine.nextWorkingDay(task._projectionBaseStart, calendar);
             if (!completed && task.isOverdue && today > start) start = CalendarEngine.nextWorkingDay(today, calendar);
-            if (!completed && task.delayDays > 0) start = CalendarEngine.shiftWorkingDays(start, task.delayDays, calendar);
+            if (!completed && task.delayDays !== 0) start = CalendarEngine.shiftWorkingDays(start, task.delayDays, calendar);
             task.projectedStart = start;
             task.projectedFinish = task._projectionDuration > 0
                 ? CalendarEngine.addWorkingDays(start, task._projectionDuration, calendar)
@@ -1055,7 +1061,8 @@ class DependencyEngine {
                 const duration = task._projectionDuration;
                 const spanBack = Math.max(0, duration - 1);
                 const completed = isComplete(task);
-                let requiredStart = task._projectionBaseStart;
+                let baseStart = CalendarEngine.nextWorkingDay(task._projectionBaseStart, calendar);
+                let dependencyStart = '';
                 const links = this.parsePredecessors(task.predecessors, tasks)
                     .filter(link => link.targetTask && link.targetTask !== task);
 
@@ -1084,18 +1091,29 @@ class DependencyEngine {
                         default:
                             candidate = CalendarEngine.shiftWorkingDays(predFinish, 1 + link.lag, calendar);
                     }
-                    if (candidate > requiredStart) requiredStart = candidate;
+                    if (!dependencyStart || candidate > dependencyStart) dependencyStart = candidate;
                 });
 
-                if (!completed && task.isOverdue && today > requiredStart) requiredStart = today;
-                let start = CalendarEngine.nextWorkingDay(requiredStart, calendar);
-                if (!completed && task.delayDays > 0) start = CalendarEngine.shiftWorkingDays(start, task.delayDays, calendar);
+                if (!completed && task.isOverdue && today > baseStart) baseStart = CalendarEngine.nextWorkingDay(today, calendar);
+
+                let start;
+                if (task.delayDays < 0) {
+                    const advancedStart = CalendarEngine.shiftWorkingDays(baseStart, task.delayDays, calendar);
+                    start = dependencyStart && dependencyStart > advancedStart
+                        ? CalendarEngine.nextWorkingDay(dependencyStart, calendar)
+                        : CalendarEngine.nextWorkingDay(advancedStart, calendar);
+                } else {
+                    const earliestStart = dependencyStart && dependencyStart > baseStart ? dependencyStart : baseStart;
+                    start = task.delayDays > 0
+                        ? CalendarEngine.shiftWorkingDays(earliestStart, task.delayDays, calendar)
+                        : CalendarEngine.nextWorkingDay(earliestStart, calendar);
+                }
                 let finish = duration > 0 ? CalendarEngine.addWorkingDays(start, duration, calendar) : start;
 
                 // Keep the baseline finish as a lower bound unless the user explicitly adjusted the projection.
                 const hasProjectionOverride = Boolean(task.projectedStartConstraint) || task.projectedDuration !== task.duration;
                 const baselineFinish = task.plannedFinish || task.finish;
-                if (!completed && !task.isOverdue && !hasProjectionOverride && !task.delayDays && baselineFinish && finish < baselineFinish) {
+                if (!completed && !task.isOverdue && !hasProjectionOverride && task.delayDays === 0 && baselineFinish && finish < baselineFinish) {
                     finish = baselineFinish;
                 }
 
@@ -1245,7 +1263,7 @@ class BaselineEngine {
         const date = new Date().toISOString();
 
         tasks.forEach(t => {
-            const completed = t.status === 'Complete' || Number(t.progress) >= 100;
+            const completed = t.status === 'Complete';
             const baselineStart = completed
                 ? (t.actualStart || t.projectedStart || t.forecastStart || t.start)
                 : (t.projectedStart || t.forecastStart || t.start);
@@ -1325,12 +1343,12 @@ class BaselineEngine {
     }
 
     static getCurrentStart(task) {
-        const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+        const complete = task.status === 'Complete';
         return complete ? (task.actualStart || task.projectedStart || task.start) : (task.projectedStart || task.start);
     }
 
     static getCurrentFinish(task) {
-        const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+        const complete = task.status === 'Complete';
         return complete ? (task.actualFinish || task.projectedFinish || task.finish) : (task.projectedFinish || task.finish);
     }
 
@@ -1594,8 +1612,8 @@ class WbsGridView {
                             ${this.visibleColumns.assignedTo ? `<col data-col="assignedTo" style="width: ${this.columnWidths.assignedTo}px;">` : ''}
                             ${this.visibleColumns.status ? `<col data-col="status" style="width: ${this.columnWidths.status}px;">` : ''}
                             ${this.visibleColumns.duration ? `<col data-col="duration" style="width: ${this.columnWidths.duration}px;">` : ''}
-                            ${this.visibleColumns.delayDays ? `<col data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;">` : ''}
                             ${this.visibleColumns.progress ? `<col data-col="progress" style="width: ${this.columnWidths.progress}px;">` : ''}
+                            ${this.visibleColumns.delayDays ? `<col data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;">` : ''}
                             ${this.visibleColumns.leadTime ? `<col data-col="leadTime" style="width: ${this.columnWidths.leadTime}px;">` : ''}
                             ${this.visibleColumns.dates ? `<col data-col="start" style="width: ${this.columnWidths.start}px;">` : ''}
                             ${this.visibleColumns.dates ? `<col data-col="finish" style="width: ${this.columnWidths.finish}px;">` : ''}
@@ -1646,16 +1664,16 @@ class WbsGridView {
                                         <div class="col-resizer" data-col="duration" title="Drag to resize column (double-click to reset)"></div>
                                     </th>
                                 ` : ''}
-                                ${this.visibleColumns.delayDays ? `
-                                    <th data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Additional delay to apply to the activity forecast, in working days">
-                                        <span>Delay (d)</span>
-                                        <div class="col-resizer" data-col="delayDays" title="Drag to resize column (double-click to reset)"></div>
-                                    </th>
-                                ` : ''}
                                 ${this.visibleColumns.progress ? `
-                                    <th data-col="progress" style="width: ${this.columnWidths.progress}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Work completed">
+                                    <th data-col="progress" style="width: ${this.columnWidths.progress}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Visual progress indicator; does not affect projected dates">
                                         <span>Done %</span>
                                         <div class="col-resizer" data-col="progress" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.delayDays ? `
+                                    <th data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Signed schedule shift: positive delays, negative advances, in working days">
+                                        <span>Delay (d)</span>
+                                        <div class="col-resizer" data-col="delayDays" title="Drag to resize column (double-click to reset)"></div>
                                     </th>
                                 ` : ''}
                                 ${this.visibleColumns.leadTime ? `
@@ -1850,7 +1868,7 @@ class WbsGridView {
                     <!-- Activity Delay -->
                     ${this.visibleColumns.delayDays ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
-                            <input type="number" min="0" max="3650" data-field="delayDays" data-id="${t.id}" value="${t.delayDays || 0}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-rose-200 bg-rose-50/50 rounded py-0.5 text-xs focus:outline-none"'} title="Extra delay in working days; downstream forecast dates will move">
+                            <input type="number" min="-3650" max="3650" step="1" data-field="delayDays" data-id="${t.id}" value="${t.delayDays || 0}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-rose-200 bg-rose-50/50 rounded py-0.5 text-xs focus:outline-none"'} title="Signed working-day shift: positive delays; negative advances. This controls projected dates.">
                         </td>
                     ` : ''}
 
@@ -1878,8 +1896,8 @@ class WbsGridView {
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" value="${CalendarEngine.formatDate(t.projectedStart)}" title="Calculated projected start" disabled class="w-full bg-indigo-50 text-indigo-800 rounded py-0.5 px-0 text-[11px] text-center font-mono"></td>
                         <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" value="${CalendarEngine.formatDate(t.projectedFinish)}" title="Calculated projected finish" disabled class="w-full bg-indigo-50 text-indigo-800 rounded py-0.5 px-0 text-[11px] text-center font-mono"></td>
-                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="date" data-field="actualStart" data-id="${t.id}" value="${t.actualStart || ''}" ${t.isSummary ? 'disabled' : ''} title="Actual start (enter when known)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
-                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="date" data-field="actualFinish" data-id="${t.id}" value="${t.actualFinish || ''}" ${t.isSummary ? 'disabled' : ''} title="Actual finish (enter when known)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" data-field="actualStart" data-id="${t.id}" value="${CalendarEngine.formatDate(t.actualStart)}" ${t.isSummary ? 'disabled' : ''} title="Actual start (DD/MM/YYYY)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" data-field="actualFinish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.actualFinish)}" ${t.isSummary ? 'disabled' : ''} title="Actual finish (DD/MM/YYYY)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
                     ` : ''}
 
                     <!-- Predecessors -->
@@ -1907,7 +1925,7 @@ class WbsGridView {
 
         this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
             element.addEventListener('keydown', event => {
-                if (element.tagName !== 'INPUT' || event.key !== 'Enter' || event.isComposing || event.shiftKey) return;
+                if (!['INPUT', 'SELECT'].includes(element.tagName) || event.key !== 'Enter' || event.isComposing || event.shiftKey) return;
                 event.preventDefault();
                 event.stopPropagation();
                 const field = element.getAttribute('data-field');
@@ -1998,8 +2016,7 @@ class WbsGridView {
                 const id = btn.getAttribute('data-id');
                 const task = this.tasks.find(t => t.id === id);
                 if (task) {
-                    task.expanded = !task.expanded;
-                    this.render(this.tasks, this.resources);
+                    if (this.onTaskChange) this.onTaskChange(id, 'toggle-expand');
                 }
             });
         });
@@ -2054,13 +2071,15 @@ class WbsGridView {
                 }
 
                 if (field === 'actualStart' || field === 'actualFinish') {
-                    value = value ? CalendarEngine.parseDate(value) : '';
-                    if (element.value && !value) {
+                    const inputText = value.trim();
+                    value = inputText ? CalendarEngine.parseDisplayDate(inputText) : '';
+                    if (inputText && !value) {
+                        alert('Enter a valid date in DD/MM/YYYY format.');
                         this.render(this.tasks, this.resources);
                         return;
                     }
                 } else if (field === 'start') {
-                    value = CalendarEngine.parseDate(value);
+                    value = CalendarEngine.parseDisplayDate(value);
                     if (!value) {
                         this.render(this.tasks, this.resources);
                         return;
@@ -2070,7 +2089,7 @@ class WbsGridView {
                 if (field === 'duration' || field === 'leadTime' || field === 'progress' || field === 'delayDays') {
                     value = parseInt(value, 10) || 0;
                     if (field === 'progress') value = Math.max(0, Math.min(100, value));
-                    if (field === 'delayDays') value = Math.max(0, Math.min(3650, value));
+                    if (field === 'delayDays') value = Math.max(-3650, Math.min(3650, value));
                 }
 
                 if (this.onTaskChange) {
@@ -2091,20 +2110,6 @@ class WbsGridView {
                     } else {
                         picker.focus();
                         picker.click();
-                    }
-                }
-            };
-        });
-
-        this.container.querySelectorAll('input[data-picker-for]').forEach(picker => {
-            picker.onchange = (e) => {
-                const id = picker.getAttribute('data-picker-for');
-                const iso = e.target.value;
-                if (iso) {
-                    const textInput = this.container.querySelector(`input[data-field="start"][data-id="${id}"]`);
-                    if (textInput) textInput.value = CalendarEngine.formatDate(iso);
-                    if (this.onTaskChange) {
-                        this.onTaskChange(id, 'start', iso);
                     }
                 }
             };
@@ -2409,12 +2414,14 @@ class WbsGridView {
 
 
 class GanttView {
-    constructor(containerElement, onTaskUpdate) {
+    constructor(containerElement, onTaskUpdate, onViewChange = null) {
         this.container = containerElement;
         this.onTaskUpdate = onTaskUpdate;
+        this.onViewChange = onViewChange;
         this.zoom = 'Week';
         this.showCriticalPath = false;
         this.showBaselineGhost = true;
+        this.showDependencies = false;
         this.dragState = null;
         this.dayWidth = 28;
         this.rowHeight = 48;
@@ -2463,6 +2470,10 @@ class GanttView {
                             <span class="${this.showCriticalPath ? 'text-red-700 font-bold' : ''}">Critical Path</span>
                         </label>
                         <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                            <input type="checkbox" id="toggle-dependencies" ${this.showDependencies ? 'checked' : ''} class="rounded text-slate-600 focus:ring-slate-500 w-3.5 h-3.5">
+                            <span>Dependencies</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
                             <input type="checkbox" id="toggle-baseline-ghost" ${this.showBaselineGhost ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5">
                             <span>Baseline Shadows</span>
                         </label>
@@ -2487,7 +2498,7 @@ class GanttView {
 
                             <!-- Predecessor Connector Lines SVG -->
                             <svg class="gantt-connectors-layer absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
-                                ${this.renderDependencies(visibleTasks)}
+                                ${this.showDependencies ? this.renderDependencies(visibleTasks) : ''}
                             </svg>
 
                             <!-- Task Bars Layer -->
@@ -2639,7 +2650,7 @@ class GanttView {
             const todayX = this.dateToPixel(todayIso);
             if (todayX >= 0 && todayX <= timelineWidth) {
                 return `
-                    <div style="left: ${todayX + this.dayWidth / 2}px;" class="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-25 pointer-events-none" title="Today (${todayIso})">
+                    <div style="left: ${todayX + this.dayWidth / 2}px;" class="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-25 pointer-events-none" title="Today (${CalendarEngine.formatDate(todayIso)})">
                         <div class="sticky top-0 -ml-3.5 px-1 py-0.5 bg-rose-600 text-white text-[9px] font-bold rounded-b shadow-xs uppercase tracking-wider text-center">Today</div>
                     </div>
                 `;
@@ -2661,7 +2672,7 @@ class GanttView {
 
     renderTaskBar(task, rowIndex) {
         const y = rowIndex * this.rowHeight + 4;
-        const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+        const complete = task.status === 'Complete';
         const forecastStart = complete && task.actualStart ? task.actualStart : (task.projectedStart || task.forecastStart || task.start);
         const forecastFinish = complete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.forecastFinish || task.finish);
         const x = this.dateToPixel(forecastStart);
@@ -2780,10 +2791,10 @@ class GanttView {
                 const fromY = fromIndex * this.rowHeight + 15;
                 const toY = toIndex * this.rowHeight + 15;
 
-                const predComplete = targetTask.status === 'Complete' || Number(targetTask.progress) >= 100;
+                const predComplete = targetTask.status === 'Complete';
                 const predStart = predComplete && targetTask.actualStart ? targetTask.actualStart : (targetTask.projectedStart || targetTask.forecastStart || targetTask.start);
                 const predFinish = predComplete && targetTask.actualFinish ? targetTask.actualFinish : (targetTask.projectedFinish || targetTask.forecastFinish || targetTask.finish);
-                const taskComplete = task.status === 'Complete' || Number(task.progress) >= 100;
+                const taskComplete = task.status === 'Complete';
                 const taskStart = taskComplete && task.actualStart ? task.actualStart : (task.projectedStart || task.forecastStart || task.start);
                 const taskFinish = taskComplete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.forecastFinish || task.finish);
                 const fromStart = pred.type === 'SS' || pred.type === 'SF';
@@ -2831,7 +2842,7 @@ class GanttView {
         this.container.querySelectorAll('[data-zoom]').forEach(btn => {
             btn.onclick = () => {
                 this.zoom = btn.getAttribute('data-zoom');
-                this.render(this.tasks, this.calendar);
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
             };
         });
 
@@ -2839,7 +2850,7 @@ class GanttView {
         if (cpToggle) {
             cpToggle.onchange = (e) => {
                 this.showCriticalPath = e.target.checked;
-                this.render(this.tasks, this.calendar);
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
             };
         }
 
@@ -2847,7 +2858,15 @@ class GanttView {
         if (bgToggle) {
             bgToggle.onchange = (e) => {
                 this.showBaselineGhost = e.target.checked;
-                this.render(this.tasks, this.calendar);
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
+            };
+        }
+
+        const dependencyToggle = this.container.querySelector('#toggle-dependencies');
+        if (dependencyToggle) {
+            dependencyToggle.onchange = (e) => {
+                this.showDependencies = e.target.checked;
+                this.onViewChange ? this.onViewChange() : this.render(this.tasks, this.calendar);
             };
         }
 
@@ -2875,7 +2894,7 @@ class GanttView {
 
             activeTaskId = bar.getAttribute('data-task-id');
             const task = this.tasks.find(t => t.id === activeTaskId);
-            if (!task || task.isSummary || task.status === 'Complete' || Number(task.progress) >= 100) return;
+            if (!task || task.isSummary || task.status === 'Complete') return;
 
             isResizing = Boolean(handle);
             startMouseX = e.clientX;
@@ -3015,7 +3034,7 @@ class MilestonesView {
         const ws = WORKSTREAMS[m.workstream] || WORKSTREAMS['HW'];
         const statusInfo = STATUS_PILLS[m.status] || STATUS_PILLS['Not Started'];
         const variance = BaselineEngine.getVariance(m);
-        const complete = m.status === 'Complete' || Number(m.progress) >= 100;
+        const complete = m.status === 'Complete';
         const targetStart = complete && m.actualStart ? m.actualStart : (m.projectedStart || m.forecastStart || m.start);
         const targetFinish = complete && m.actualFinish ? m.actualFinish : (m.projectedFinish || m.forecastFinish || m.finish);
 
@@ -3172,7 +3191,7 @@ class ResourceView {
         let maxFinish = null;
 
         tasks.forEach(t => {
-            const complete = t.status === 'Complete' || Number(t.progress) >= 100;
+            const complete = t.status === 'Complete';
             const start = complete && t.actualStart ? t.actualStart : (t.projectedStart || t.start);
             const finish = complete && t.actualFinish ? t.actualFinish : (t.projectedFinish || t.finish);
             if (start && (!minStart || start < minStart)) minStart = start;
@@ -3203,7 +3222,7 @@ class ResourceView {
         const workloadMap = new Map();
 
         tasks.forEach(task => {
-            const complete = task.status === 'Complete' || Number(task.progress) >= 100;
+            const complete = task.status === 'Complete';
             const taskStart = complete && task.actualStart ? task.actualStart : (task.projectedStart || task.start);
             const taskFinish = complete && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.finish);
             if (!taskStart || !taskFinish) return;
@@ -3540,7 +3559,7 @@ class CalendarModalView {
             addHolidayBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-holiday-date');
                 const nameInput = this.container.querySelector('#new-holiday-name');
-                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                const iso = dateInput ? CalendarEngine.parseDisplayDate(dateInput.value) : null;
                 if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
                 if (iso && nameInput && nameInput.value.trim()) {
                     this.calendar.holidays.push({
@@ -3567,7 +3586,7 @@ class CalendarModalView {
             addOvertimeBtn.onclick = () => {
                 const dateInput = this.container.querySelector('#new-overtime-date');
                 const noteInput = this.container.querySelector('#new-overtime-note');
-                const iso = dateInput ? CalendarEngine.parseDate(dateInput.value) : null;
+                const iso = dateInput ? CalendarEngine.parseDisplayDate(dateInput.value) : null;
                 if (dateInput && !iso) alert('Enter date as DD/MM/YYYY');
                 if (iso && noteInput && noteInput.value.trim()) {
                     this.calendar.overtimeDays.push({
@@ -3966,8 +3985,8 @@ class DependencyTreeView {
                 <div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 font-mono">
                     <div><span class="text-slate-400">Dur:</span> <span class="font-bold text-slate-800">${task.duration}d</span></div>
                     <div><span class="text-slate-400">Lead:</span> <span class="font-bold text-amber-700">${task.leadTime || 0}d</span></div>
-                    <div><span class="text-slate-400">Start:</span> ${CalendarEngine.formatDate((task.status === 'Complete' || Number(task.progress) >= 100) && task.actualStart ? task.actualStart : (task.projectedStart || task.start)) || '-'}</div>
-                    <div><span class="text-slate-400">End:</span> ${CalendarEngine.formatDate((task.status === 'Complete' || Number(task.progress) >= 100) && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.finish)) || '-'}</div>
+                    <div><span class="text-slate-400">Start:</span> ${CalendarEngine.formatDate(task.status === 'Complete' && task.actualStart ? task.actualStart : (task.projectedStart || task.start)) || '-'}</div>
+                    <div><span class="text-slate-400">End:</span> ${CalendarEngine.formatDate(task.status === 'Complete' && task.actualFinish ? task.actualFinish : (task.projectedFinish || task.finish)) || '-'}</div>
                 </div>
 
                 <!-- Engineer & Predecessors -->
@@ -4119,7 +4138,7 @@ class InfoGuideView {
                                     Bidirectional Gantt Chart Drag & Drop
                                 </h4>
                                 <p class="text-slate-600 leading-relaxed">
-                                    <strong>Baseline Start/Finish</strong> stay fixed while <strong>Projected Start/Finish</strong> recalculate from predecessor dates. Enter actual dates separately as work happens. The <strong>Delay (d)</strong> field shifts projections and dependent tasks; dragging a Gantt bar adjusts projections only. A new baseline uses actual dates for completed activities and projected dates otherwise.
+                                    <strong>Baseline Start/Finish</strong> stay fixed while <strong>Projected Start/Finish</strong> recalculate from predecessor dates. Enter actual dates separately as work happens. Signed <strong>Delay (d)</strong> values push dates later (+) or earlier (−) and update dependent forecasts. Percentage complete only colors the bar fill; it does not change dates or duration. Only Status <strong>Complete</strong> selects actual dates.
                                 </p>
                             </div>
 
@@ -4858,7 +4877,11 @@ class ProjectManagementApp {
         const streamModalContainer = document.getElementById('stream-modal-container');
 
         this.wbsView = new WbsGridView(wbsContainer, (taskId, action, value) => this.handleTaskChange(taskId, action, value), (taskId) => this.handleTaskSelect(taskId));
-        this.ganttView = new GanttView(ganttContainer, (taskId) => this.handleGanttUpdate(taskId));
+        this.ganttView = new GanttView(
+            ganttContainer,
+            (taskId) => this.handleGanttUpdate(taskId),
+            () => this.renderAllViews()
+        );
         this.milestonesView = new MilestonesView(milestonesContainer);
         this.deptreeView = new DependencyTreeView(deptreeContainer);
         this.infoGuideView = new InfoGuideView(infoGuideContainer);
@@ -5100,6 +5123,9 @@ class ProjectManagementApp {
 
             this.tasks.splice(insertIndex, 0, newTask);
             this.selectedTaskId = newTask.id;
+        } else if (actionOrField === 'toggle-expand' && taskId) {
+            const task = this.tasks.find(item => item.id === taskId);
+            if (task) task.expanded = !task.expanded;
         } else if (actionOrField === 'indent' && taskId) {
             this.indentTask(taskId);
         } else if (actionOrField === 'outdent' && taskId) {
