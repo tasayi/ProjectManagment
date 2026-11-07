@@ -111,18 +111,18 @@
     </header>
 
     <!-- Main Workspace Container -->
-    <main class="flex-1 flex overflow-hidden relative">
+    <main class="flex-1 min-h-0 flex overflow-hidden relative">
 
         <!-- Split View (Grid + Gantt) -->
-        <div id="split-view-container" class="w-full h-full flex overflow-hidden">
+        <div id="split-view-container" class="w-full h-full min-h-0 flex overflow-hidden">
             <!-- Left Pane: WBS Grid -->
-            <div id="wbs-pane" style="width: 50%; min-width: 340px;" class="h-full flex-shrink-0"></div>
+            <div id="wbs-pane" style="width: 50%; min-width: 340px;" class="h-full min-h-0 flex-shrink-0 overflow-hidden"></div>
 
             <!-- Draggable Split Resizer Bar -->
             <div id="split-resizer" class="split-resizer h-full z-20"></div>
 
             <!-- Right Pane: Interactive Gantt Chart -->
-            <div id="gantt-pane" class="flex-1 h-full overflow-hidden"></div>
+            <div id="gantt-pane" class="flex-1 h-full min-h-0 overflow-hidden"></div>
         </div>
 
         <!-- Resource Pool & Workload Heatmap View (Initially Hidden) -->

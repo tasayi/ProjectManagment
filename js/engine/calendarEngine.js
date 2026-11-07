@@ -75,6 +75,14 @@ export class CalendarEngine {
         return dt.toISOString().split('T')[0];
     }
 
+    /** Parse a user-entered DD/MM/YYYY date without locale-dependent interpretation. */
+    static parseDisplayDate(str) {
+        const match = /^([0-3]\d)\/([0-1]\d)\/(\d{4})$/.exec((str || '').trim());
+        if (!match) return null;
+        const [, day, month, year] = match;
+        return this.parseDate(`${year}-${month}-${day}`);
+    }
+
     static addCalendarDays(dateStr, n) {
         const d = new Date(dateStr + 'T00:00:00Z');
         d.setUTCDate(d.getUTCDate() + n);

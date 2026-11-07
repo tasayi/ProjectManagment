@@ -7,33 +7,43 @@ import { BaselineEngine } from '../engine/baselineEngine.js';
 import { CalendarEngine } from '../engine/calendarEngine.js';
 
 export const DEFAULT_COLUMN_WIDTHS = {
-    wbs: 48,
+    wbs: 68,
     name: null, // Elastic: fills available space
     workstream: 72,
     stage: 60,
     assignedTo: 130,
     status: 78,
     duration: 50,
+    delayDays: 52,
     progress: 50,
     leadTime: 50,
-    start: 86,
-    finish: 72,
+    start: 104,
+    finish: 104,
+    projectedStart: 104,
+    projectedFinish: 104,
+    actualStart: 96,
+    actualFinish: 96,
     predecessors: 80,
     variance: 70
 };
 
 export const MIN_COLUMN_WIDTHS = {
-    wbs: 36,
+    wbs: 58,
     name: 110,
     workstream: 48,
     stage: 46,
     assignedTo: 70,
     status: 55,
     duration: 40,
+    delayDays: 44,
     progress: 40,
     leadTime: 40,
-    start: 78,
-    finish: 66,
+    start: 96,
+    finish: 96,
+    projectedStart: 96,
+    projectedFinish: 96,
+    actualStart: 88,
+    actualFinish: 88,
     predecessors: 50,
     variance: 50
 };
@@ -51,6 +61,7 @@ export class WbsGridView {
             status: true,
             assignedTo: true,
             duration: true,
+            delayDays: true,
             progress: true,
             dates: true,
             predecessors: true,
@@ -64,7 +75,7 @@ export class WbsGridView {
         try {
             const saved = localStorage.getItem('wbs_grid_column_widths_v2');
             if (saved) {
-                return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(saved) };
+                return this.normalizeColumnWidths({ ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(saved) });
             }
             // Migrate from v1 and reset cached inflated date widths
             const v1 = localStorage.getItem('wbs_grid_column_widths');
@@ -73,12 +84,21 @@ export class WbsGridView {
                 if (parsed.start && parsed.start > 86) parsed.start = DEFAULT_COLUMN_WIDTHS.start;
                 if (parsed.finish && parsed.finish > 72) parsed.finish = DEFAULT_COLUMN_WIDTHS.finish;
                 if (parsed.name && parsed.name <= 220) parsed.name = null;
-                return { ...DEFAULT_COLUMN_WIDTHS, ...parsed };
+                return this.normalizeColumnWidths({ ...DEFAULT_COLUMN_WIDTHS, ...parsed });
             }
         } catch (e) {
             console.warn('Failed to load column widths:', e);
         }
-        return { ...DEFAULT_COLUMN_WIDTHS };
+        return this.normalizeColumnWidths({ ...DEFAULT_COLUMN_WIDTHS });
+    }
+
+    normalizeColumnWidths(widths) {
+        Object.entries(MIN_COLUMN_WIDTHS).forEach(([column, minWidth]) => {
+            if (typeof widths[column] === 'number' && widths[column] < minWidth) {
+                widths[column] = minWidth;
+            }
+        });
+        return widths;
     }
 
     saveColumnWidths() {
@@ -96,7 +116,7 @@ export class WbsGridView {
         this.resources = resources;
 
         const html = `
-            <div class="wbs-grid-container flex flex-col h-full bg-white border-r border-slate-200 overflow-hidden select-none">
+            <div class="wbs-grid-container flex flex-col h-full min-h-0 bg-white border-r border-slate-200 overflow-hidden select-none">
                 <!-- Grid Header Toolbar -->
                 <div class="wbs-toolbar flex items-center justify-between p-2 bg-slate-50 border-b border-slate-200 text-xs gap-1 flex-wrap">
                     <div class="flex items-center gap-1">
@@ -117,6 +137,7 @@ export class WbsGridView {
                         <button id="btn-delete" title="Delete Selected" class="p-1 hover:bg-red-100 text-red-600 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                         </button>
+                        <button id="btn-edit-notes" title="Add or edit notes for the selected activity" class="px-2 py-1 border border-slate-300 hover:bg-amber-50 text-amber-700 rounded transition disabled:opacity-40" ${!this.selectedTaskId ? 'disabled' : ''}>📝 Notes</button>
                     </div>
 
                     <!-- Filter / Search -->
@@ -129,7 +150,7 @@ export class WbsGridView {
                 </div>
 
                 <!-- Table Content Container -->
-                <div class="wbs-table-wrapper flex-1 overflow-auto">
+                <div class="wbs-table-wrapper flex-1 min-h-0 overflow-auto">
                     <table class="w-full text-left border-collapse text-xs" style="table-layout: fixed; min-width: 780px;">
                         <colgroup>
                             <col data-col="wbs" style="width: ${this.columnWidths.wbs}px;">
@@ -140,19 +161,24 @@ export class WbsGridView {
                             ${this.visibleColumns.status ? `<col data-col="status" style="width: ${this.columnWidths.status}px;">` : ''}
                             ${this.visibleColumns.duration ? `<col data-col="duration" style="width: ${this.columnWidths.duration}px;">` : ''}
                             ${this.visibleColumns.progress ? `<col data-col="progress" style="width: ${this.columnWidths.progress}px;">` : ''}
+                            ${this.visibleColumns.delayDays ? `<col data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;">` : ''}
                             ${this.visibleColumns.leadTime ? `<col data-col="leadTime" style="width: ${this.columnWidths.leadTime}px;">` : ''}
                             ${this.visibleColumns.dates ? `<col data-col="start" style="width: ${this.columnWidths.start}px;">` : ''}
                             ${this.visibleColumns.dates ? `<col data-col="finish" style="width: ${this.columnWidths.finish}px;">` : ''}
+                            ${this.visibleColumns.dates ? `<col data-col="projectedStart" style="width: ${this.columnWidths.projectedStart}px;">` : ''}
+                            ${this.visibleColumns.dates ? `<col data-col="projectedFinish" style="width: ${this.columnWidths.projectedFinish}px;">` : ''}
+                            ${this.visibleColumns.dates ? `<col data-col="actualStart" style="width: ${this.columnWidths.actualStart}px;">` : ''}
+                            ${this.visibleColumns.dates ? `<col data-col="actualFinish" style="width: ${this.columnWidths.actualFinish}px;">` : ''}
                             ${this.visibleColumns.predecessors ? `<col data-col="predecessors" style="width: ${this.columnWidths.predecessors}px;">` : ''}
                             ${this.visibleColumns.variance ? `<col data-col="variance" style="width: ${this.columnWidths.variance}px;">` : ''}
                         </colgroup>
                         <thead class="bg-slate-100 sticky top-0 z-10 shadow-sm border-b border-slate-300 text-slate-600 font-semibold uppercase tracking-wider">
                             <tr>
-                                <th data-col="wbs" style="width: ${this.columnWidths.wbs}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none">
+                                <th data-col="wbs" style="width: ${this.columnWidths.wbs}px; left: 0;" class="sticky-wbs-col relative py-2 px-1 text-center border-r border-slate-200 select-none">
                                     <span>WBS</span>
                                     <div class="col-resizer" data-col="wbs" title="Drag to resize column (double-click to reset)"></div>
                                 </th>
-                                <th data-col="name" ${this.columnWidths.name ? `style="width: ${this.columnWidths.name}px;"` : 'style="min-width: 140px;"'} class="relative py-2 px-2 border-r border-slate-200 select-none">
+                                <th data-col="name" ${this.columnWidths.name ? `style="width: ${this.columnWidths.name}px; left: ${this.columnWidths.wbs}px;"` : `style="min-width: 140px; left: ${this.columnWidths.wbs}px;"`} class="sticky-name-col relative py-2 px-2 border-r border-slate-200 select-none">
                                     <span>Activity Name</span>
                                     <div class="col-resizer" data-col="name" title="Drag to resize column (double-click to reset)"></div>
                                 </th>
@@ -187,9 +213,15 @@ export class WbsGridView {
                                     </th>
                                 ` : ''}
                                 ${this.visibleColumns.progress ? `
-                                    <th data-col="progress" style="width: ${this.columnWidths.progress}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Work completed">
+                                    <th data-col="progress" style="width: ${this.columnWidths.progress}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Visual progress indicator; does not affect projected dates">
                                         <span>Done %</span>
                                         <div class="col-resizer" data-col="progress" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.delayDays ? `
+                                    <th data-col="delayDays" style="width: ${this.columnWidths.delayDays}px;" class="relative py-2 px-1 text-center border-r border-slate-200 select-none" title="Signed schedule shift: positive delays, negative advances, in working days">
+                                        <span>Delay (d)</span>
+                                        <div class="col-resizer" data-col="delayDays" title="Drag to resize column (double-click to reset)"></div>
                                     </th>
                                 ` : ''}
                                 ${this.visibleColumns.leadTime ? `
@@ -200,14 +232,32 @@ export class WbsGridView {
                                 ` : ''}
                                 ${this.visibleColumns.dates ? `
                                     <th data-col="start" style="width: ${this.columnWidths.start}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none">
-                                        <span>Start</span>
+                                        <span>Baseline Start</span>
                                         <div class="col-resizer" data-col="start" title="Drag to resize column (double-click to reset)"></div>
                                     </th>
                                 ` : ''}
                                 ${this.visibleColumns.dates ? `
                                     <th data-col="finish" style="width: ${this.columnWidths.finish}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none">
-                                        <span>Finish</span>
+                                        <span>Baseline Finish</span>
                                         <div class="col-resizer" data-col="finish" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                ` : ''}
+                                ${this.visibleColumns.dates ? `
+                                    <th data-col="projectedStart" style="width: ${this.columnWidths.projectedStart}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none" title="Automatically calculated projected start date">
+                                        <span>Projected Start</span>
+                                        <div class="col-resizer" data-col="projectedStart" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                    <th data-col="projectedFinish" style="width: ${this.columnWidths.projectedFinish}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none" title="Automatically calculated projected finish date">
+                                        <span>Projected Finish</span>
+                                        <div class="col-resizer" data-col="projectedFinish" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                    <th data-col="actualStart" style="width: ${this.columnWidths.actualStart}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none" title="Enter the date work actually started">
+                                        <span>Actual Start</span>
+                                        <div class="col-resizer" data-col="actualStart" title="Drag to resize column (double-click to reset)"></div>
+                                    </th>
+                                    <th data-col="actualFinish" style="width: ${this.columnWidths.actualFinish}px;" class="relative py-2 px-0.5 text-center border-r border-slate-200 select-none" title="Enter the date work actually finished">
+                                        <span>Actual Finish</span>
+                                        <div class="col-resizer" data-col="actualFinish" title="Drag to resize column (double-click to reset)"></div>
                                     </th>
                                 ` : ''}
                                 ${this.visibleColumns.predecessors ? `
@@ -274,12 +324,13 @@ export class WbsGridView {
             return `
                 <tr data-id="${t.id}" class="wbs-row hover:bg-slate-50 transition-colors ${isSelected ? 'is-active font-medium' : ''} ${t.isSummary ? 'font-semibold bg-slate-50/70' : ''}">
                     <!-- WBS -->
-                    <td class="py-1.5 px-2 text-center text-slate-500 text-[11px] font-mono border-r border-slate-200">
+                    <td style="left: 0;" class="sticky-wbs-col py-1.5 px-1 text-center text-slate-500 text-[11px] font-mono border-r border-slate-200 whitespace-nowrap">
                         <span class="wbs-drag-handle cursor-grab text-slate-400 hover:text-slate-700 mr-0.5" draggable="true" data-id="${t.id}" title="Drag to move task">&#8942;&#8942;</span>${t.wbs}
+                        ${t.notes ? `<button type="button" data-action="edit-notes" data-id="${t.id}" class="inline-flex align-middle text-amber-600 hover:text-amber-800 ml-0.5" title="View or edit activity notes" aria-label="Edit notes for ${this.escapeHtml(t.name)}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>` : ''}
                     </td>
 
                     <!-- Activity Name -->
-                    <td class="py-1 px-2 border-r border-slate-200 overflow-hidden">
+                    <td style="left: ${this.columnWidths.wbs}px;" class="sticky-name-col py-1 px-2 border-r border-slate-200 overflow-hidden">
                         <div class="flex items-center gap-1" style="padding-left: ${indentLevel}px;">
                             ${t.isSummary ? `
                                 <button data-action="toggle-expand" data-id="${t.id}" class="p-0.5 hover:bg-slate-200 rounded text-slate-500 transition">
@@ -344,6 +395,7 @@ export class WbsGridView {
                                 `).join('')}
                                 <option value="__ADD_CUSTOM_STATUS__">+ Add Custom...</option>
                             </select>
+                            ${t.isOverdue ? `<span class="mt-0.5 inline-block px-1 py-0.5 rounded text-[9px] font-bold text-red-700 bg-red-100 border border-red-200" title="Planned finish ${CalendarEngine.formatDate(t.plannedFinish || t.finish)}; projected finish ${CalendarEngine.formatDate(t.projectedFinish)}">Overdue · ${t.overdueDays}d</span>` : ''}
                         </td>
                     ` : ''}
 
@@ -361,6 +413,13 @@ export class WbsGridView {
                         </td>
                     ` : ''}
 
+                    <!-- Activity Delay -->
+                    ${this.visibleColumns.delayDays ? `
+                        <td class="py-1 px-1 text-center border-r border-slate-200">
+                            <input type="number" min="-3650" max="3650" step="1" data-field="delayDays" data-id="${t.id}" value="${t.delayDays || 0}" ${t.isSummary ? 'disabled class="w-12 text-center bg-slate-100 text-slate-500 rounded py-0.5 text-xs"' : 'class="w-12 text-center border border-rose-200 bg-rose-50/50 rounded py-0.5 text-xs focus:outline-none"'} title="Signed working-day shift: positive delays; negative advances. This controls projected dates.">
+                        </td>
+                    ` : ''}
+
                     <!-- Procurement Lead Time -->
                     ${this.visibleColumns.leadTime ? `
                         <td class="py-1 px-1 text-center border-r border-slate-200">
@@ -371,23 +430,22 @@ export class WbsGridView {
                     <!-- Start Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-0.5 border-r border-slate-200">
-                            <div class="flex items-center gap-0.5">
-                                <input type="text" placeholder="DD/MM/YYYY" data-field="start" data-id="${t.id}" value="${CalendarEngine.formatDate(t.start)}" ${t.isSummary ? 'disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 px-0 text-[11px] text-center font-mono"' : 'class="flex-1 min-w-0 border border-slate-200 rounded py-0.5 px-0 text-[11px] text-center focus:outline-none focus:border-indigo-500 font-mono"'}>
-                                ${!t.isSummary ? `
-                                    <button type="button" data-action="pick-calendar" data-id="${t.id}" title="Click to open calendar pop-up" class="flex-shrink-0 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 border border-slate-200 rounded transition p-0.5 bg-white shadow-2xs">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                    </button>
-                                    <input type="date" data-picker-for="${t.id}" value="${t.start || ''}" class="sr-only" tabindex="-1">
-                                ` : ''}
-                            </div>
+                            <input type="text" value="${CalendarEngine.formatDate(t.start)}" title="Date from selected baseline" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 px-0 text-[11px] text-center font-mono">
                         </td>
                     ` : ''}
 
                     <!-- Finish Date -->
                     ${this.visibleColumns.dates ? `
                         <td class="py-1 px-0.5 border-r border-slate-200">
-                            <input type="text" data-field="finish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.finish)}" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 px-0 text-[11px] text-center font-mono">
+                            <input type="text" value="${CalendarEngine.formatDate(t.finish)}" title="Date from selected baseline" disabled class="w-full bg-slate-100 text-slate-600 rounded py-0.5 px-0 text-[11px] text-center font-mono">
                         </td>
+                    ` : ''}
+
+                    ${this.visibleColumns.dates ? `
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" value="${CalendarEngine.formatDate(t.projectedStart)}" title="Calculated projected start" disabled class="w-full bg-indigo-50 text-indigo-800 rounded py-0.5 px-0 text-[11px] text-center font-mono"></td>
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" value="${CalendarEngine.formatDate(t.projectedFinish)}" title="Calculated projected finish" disabled class="w-full bg-indigo-50 text-indigo-800 rounded py-0.5 px-0 text-[11px] text-center font-mono"></td>
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" data-field="actualStart" data-id="${t.id}" value="${CalendarEngine.formatDate(t.actualStart)}" ${t.isSummary ? 'disabled' : ''} title="Actual start (DD/MM/YYYY)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
+                        <td class="py-1 px-0.5 border-r border-slate-200"><input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" data-field="actualFinish" data-id="${t.id}" value="${CalendarEngine.formatDate(t.actualFinish)}" ${t.isSummary ? 'disabled' : ''} title="Actual finish (DD/MM/YYYY)" class="w-full border border-emerald-200 bg-emerald-50/60 rounded py-0.5 px-0 text-[10px] text-center font-mono focus:outline-none focus:border-emerald-500"></td>
                     ` : ''}
 
                     <!-- Predecessors -->
@@ -412,6 +470,42 @@ export class WbsGridView {
 
     attachEventListeners() {
         if (!this.container) return;
+
+        this.container.querySelectorAll('input[data-field], select[data-field]').forEach(element => {
+            element.addEventListener('keydown', event => {
+                if (!['INPUT', 'SELECT'].includes(element.tagName) || event.key !== 'Enter' || event.isComposing || event.shiftKey) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const field = element.getAttribute('data-field');
+                const row = element.closest('.wbs-row');
+                if (!row || !field) return;
+                const rowId = row.getAttribute('data-id');
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+
+                const rows = [...this.container.querySelectorAll('.wbs-row')];
+                const currentIndex = rows.findIndex(item => item.getAttribute('data-id') === rowId);
+                const nextInput = rows.slice(currentIndex + 1)
+                    .map(item => item.querySelector(`[data-field="${field}"]:not(:disabled)`))
+                    .find(Boolean);
+                if (nextInput) {
+                    const scrollPane = this.container.querySelector('.wbs-table-wrapper');
+                    const stickyHeader = this.container.querySelector('thead');
+                    const rowRect = nextInput.closest('.wbs-row').getBoundingClientRect();
+                    const paneRect = scrollPane.getBoundingClientRect();
+                    const topLimit = paneRect.top + (stickyHeader?.getBoundingClientRect().height || 0);
+                    if (rowRect.top < topLimit) {
+                        scrollPane.scrollTop -= topLimit - rowRect.top;
+                    } else if (rowRect.bottom > paneRect.bottom) {
+                        scrollPane.scrollTop += rowRect.bottom - paneRect.bottom;
+                    }
+                    if (this.onScrollSync) this.onScrollSync();
+                    nextInput.focus({ preventScroll: true });
+                    if (typeof nextInput.select === 'function' && nextInput.type !== 'date' && nextInput.type !== 'checkbox') {
+                        nextInput.select();
+                    }
+                }
+            });
+        });
 
         // Row click selection
         this.container.querySelectorAll('.wbs-row').forEach(row => {
@@ -470,8 +564,7 @@ export class WbsGridView {
                 const id = btn.getAttribute('data-id');
                 const task = this.tasks.find(t => t.id === id);
                 if (task) {
-                    task.expanded = !task.expanded;
-                    this.render(this.tasks, this.resources);
+                    if (this.onTaskChange) this.onTaskChange(id, 'toggle-expand');
                 }
             });
         });
@@ -482,6 +575,13 @@ export class WbsGridView {
                 e.stopPropagation();
                 const id = cell.getAttribute('data-id');
                 this.openAssignmentModal(id);
+            });
+        });
+
+        this.container.querySelectorAll('[data-action="edit-notes"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openNotesEditor(btn.getAttribute('data-id'));
             });
         });
 
@@ -518,17 +618,26 @@ export class WbsGridView {
                     }
                 }
 
-                if (field === 'start') {
-                    value = CalendarEngine.parseDate(value);
+                if (field === 'actualStart' || field === 'actualFinish') {
+                    const inputText = value.trim();
+                    value = inputText ? CalendarEngine.parseDisplayDate(inputText) : '';
+                    if (inputText && !value) {
+                        alert('Enter a valid date in DD/MM/YYYY format.');
+                        this.render(this.tasks, this.resources);
+                        return;
+                    }
+                } else if (field === 'start') {
+                    value = CalendarEngine.parseDisplayDate(value);
                     if (!value) {
                         this.render(this.tasks, this.resources);
                         return;
                     }
                 }
 
-                if (field === 'duration' || field === 'leadTime' || field === 'progress') {
+                if (field === 'duration' || field === 'leadTime' || field === 'progress' || field === 'delayDays') {
                     value = parseInt(value, 10) || 0;
                     if (field === 'progress') value = Math.max(0, Math.min(100, value));
+                    if (field === 'delayDays') value = Math.max(-3650, Math.min(3650, value));
                 }
 
                 if (this.onTaskChange) {
@@ -554,20 +663,6 @@ export class WbsGridView {
             };
         });
 
-        this.container.querySelectorAll('input[data-picker-for]').forEach(picker => {
-            picker.onchange = (e) => {
-                const id = picker.getAttribute('data-picker-for');
-                const iso = e.target.value;
-                if (iso) {
-                    const textInput = this.container.querySelector(`input[data-field="start"][data-id="${id}"]`);
-                    if (textInput) textInput.value = CalendarEngine.formatDate(iso);
-                    if (this.onTaskChange) {
-                        this.onTaskChange(id, 'start', iso);
-                    }
-                }
-            };
-        });
-
         // Toolbar buttons
         const addBtn = this.container.querySelector('#btn-add-task');
         if (addBtn) addBtn.onclick = () => this.onTaskChange(null, 'add-task');
@@ -583,6 +678,9 @@ export class WbsGridView {
 
         const deleteBtn = this.container.querySelector('#btn-delete');
         if (deleteBtn) deleteBtn.onclick = () => this.onTaskChange(this.selectedTaskId, 'delete');
+
+        const notesBtn = this.container.querySelector('#btn-edit-notes');
+        if (notesBtn) notesBtn.onclick = () => this.openNotesEditor(this.selectedTaskId);
 
         // Search filter
         const searchInput = this.container.querySelector('#wbs-search');
@@ -625,6 +723,7 @@ export class WbsGridView {
                     this.columnWidths[col] = newWidth;
                     th.style.width = `${newWidth}px`;
                     if (colElem) colElem.style.width = `${newWidth}px`;
+                    if (col === 'wbs') this.updateStickyColumnOffsets(newWidth);
                 };
 
                 const onMouseUp = () => {
@@ -656,7 +755,14 @@ export class WbsGridView {
                     if (th) th.style.width = '';
                     if (colElem) colElem.style.width = '';
                 }
+                if (col === 'wbs') this.updateStickyColumnOffsets(defaultWidth || th?.offsetWidth || DEFAULT_COLUMN_WIDTHS.wbs);
             };
+        });
+    }
+
+    updateStickyColumnOffsets(wbsWidth) {
+        this.container.querySelectorAll('.sticky-name-col').forEach(cell => {
+            cell.style.left = `${wbsWidth}px`;
         });
     }
 
@@ -771,7 +877,7 @@ export class WbsGridView {
             }
         });
 
-        ['#btn-indent', '#btn-outdent', '#btn-delete'].forEach(selector => {
+        ['#btn-indent', '#btn-outdent', '#btn-delete', '#btn-edit-notes'].forEach(selector => {
             const btn = this.container.querySelector(selector);
             if (btn) btn.disabled = !taskId;
         });
@@ -801,6 +907,42 @@ export class WbsGridView {
 
         tbody.innerHTML = this.renderRows(filtered);
         this.attachEventListeners();
+    }
+
+    openNotesEditor(taskId) {
+        const task = this.tasks.find(item => item.id === taskId);
+        const container = this.container.querySelector('#assignment-popover-container');
+        if (!task || !container) return;
+
+        container.innerHTML = `
+            <div class="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" data-notes-backdrop>
+                <section class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden" role="dialog" aria-modal="true" aria-label="Activity notes">
+                    <header class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+                        <strong class="text-sm">Notes · ${this.escapeHtml(task.wbs)} ${this.escapeHtml(task.name)}</strong>
+                        <button type="button" data-notes-close class="text-slate-300 hover:text-white" aria-label="Close notes">✕</button>
+                    </header>
+                    <div class="p-4">
+                        <textarea data-notes-text class="w-full h-40 p-2 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Add notes for this activity...">${this.escapeHtml(task.notes || '')}</textarea>
+                    </div>
+                    <footer class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                        <button type="button" data-notes-cancel class="px-3 py-1.5 rounded bg-slate-200 text-slate-700 text-xs font-medium">Cancel</button>
+                        <button type="button" data-notes-save class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold">Save Notes</button>
+                    </footer>
+                </section>
+            </div>`;
+
+        const close = () => { container.innerHTML = ''; };
+        container.querySelector('[data-notes-close]').onclick = close;
+        container.querySelector('[data-notes-cancel]').onclick = close;
+        container.querySelector('[data-notes-backdrop]').onclick = event => {
+            if (event.target === event.currentTarget) close();
+        };
+        container.querySelector('[data-notes-save]').onclick = () => {
+            const notes = container.querySelector('[data-notes-text]').value;
+            close();
+            if (this.onTaskChange) this.onTaskChange(task.id, 'notes', notes);
+        };
+        container.querySelector('[data-notes-text]').focus();
     }
 
     escapeHtml(str) {

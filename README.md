@@ -12,18 +12,20 @@
 
 ### 📅 Interactive Task Sheet & WBS Hierarchy
 - **Work Breakdown Structure (WBS)**: Unlimited nested subtask hierarchy with automatic WBS numbering (`1.1.2`).
-- **Summary Task Auto-Aggregation**: Parent tasks auto-calculate duration, start/finish bounds, and weighted progress from child activities.
+- **Summary Task Auto-Aggregation**: Parent activities roll up projected date bounds and weighted progress from child activities; baseline snapshots remain separate.
 - **Milestone Diamonds**: Tasks with `0` duration automatically render as milestone diamonds.
 - **Inline Spreadsheet Editing**: Edit Activity Name, Stage, Workstream, Status, Duration, Start Date, Predecessors, Vendor, and Lead Time directly in table cells.
+- **Separate Date Tracking**: Baseline Start/Finish remain stable, projected dates recalculate from predecessor links and signed working-day offsets, and actual dates are entered independently. Progress percentage is visual only and does not change forecast dates.
+- **Long-Schedule Navigation**: WBS and Activity Name stay fixed during horizontal scrolling, Grid and Gantt vertical scrolling stay synchronized, and Enter advances editing to the next activity in the same column.
 
 ### 📊 Bidirectional Interactive Gantt Chart
 - **Real-Time Drag & Drop**:
-  - Drag the body of any task bar to translate start and finish dates live.
-  - Drag the right edge handle to extend or reduce task duration.
+    - Drag the body of an unfinished task bar to adjust projected start.
+    - Drag the right edge handle to extend or reduce projected duration.
   - Changes on the Gantt timeline instantly update the WBS Activity table and vice versa.
 - **SVG Dependency Lines & Arrowheads**: Visual orthogonal connection lines with direction arrows (`FS`, `SS`, `FF`, `SF` with positive/negative lag).
 - **Critical Path Method (CPM)**: One-click toggle to highlight critical path activities and dependency arrows in bold red.
-- **Baseline Shadow Ghost Bars**: Translucent shadow bars rendered below current task bars to visually compare current schedule against target baselines.
+- **Baseline Shadow Ghost Bars**: Translucent shadow bars rendered below projected/actual task bars to compare the current schedule against the selected baseline.
 
 ### 👥 Multi-Engineer Assignments & Fractional Day Loading
 - **Multi-Engineer Tasks**: Assign one or more team members to a single task (e.g. *Priya Sharma 100%, Alex Rivera 50%*).

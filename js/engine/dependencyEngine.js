@@ -66,32 +66,15 @@ export class DependencyEngine {
             const children = childrenMap.get(parent.id) || [];
             if (children.length === 0) return;
 
-            let minStart = null;
-            let maxFinish = null;
             let totalWeightedProgress = 0;
             let totalDuration = 0;
 
             children.forEach(child => {
-                if (child.start) {
-                    if (!minStart || new Date(child.start) < new Date(minStart)) {
-                        minStart = child.start;
-                    }
-                }
-                if (child.finish) {
-                    if (!maxFinish || new Date(child.finish) > new Date(maxFinish)) {
-                        maxFinish = child.finish;
-                    }
-                }
                 const dur = Math.max(1, child.duration || 1);
                 totalDuration += dur;
                 totalWeightedProgress += (child.progress || 0) * dur;
             });
 
-            if (minStart) parent.start = minStart;
-            if (maxFinish) parent.finish = maxFinish;
-            if (minStart && maxFinish) {
-                parent.duration = this.getWorkingDays(minStart, maxFinish, calendar);
-            }
             parent.progress = totalDuration > 0 ? Math.round(totalWeightedProgress / totalDuration) : 0;
         });
     }
@@ -103,24 +86,24 @@ export class DependencyEngine {
         if (!predStr || typeof predStr !== 'string') return [];
         
         const wbsMap = new Map();
-        tasks.forEach((t, idx) => {
-            wbsMap.set(t.wbs, t);
-            wbsMap.set((idx + 1).toString(), t);
-            wbsMap.set(t.id, t);
+        tasks.forEach(t => {
+            if (t.wbs) wbsMap.set(String(t.wbs), t);
         });
+        const idMap = new Map(tasks.map(task => [task.id, task]));
+        const positionMap = new Map(tasks.map((task, index) => [(index + 1).toString(), task]));
 
         const items = predStr.split(',').map(s => s.trim()).filter(Boolean);
         const results = [];
 
         items.forEach(item => {
-            const match = item.match(/^([\w.]+)(FS|SS|FF|SF)?(?:([+-])(\d+)[dD]?)?$/i);
+            const match = item.match(/^([\w.]+?)(FS|SS|FF|SF)?(?:([+-])(\d+)[dD]?)?$/i);
             if (match) {
                 const targetRef = match[1];
                 const type = (match[2] || 'FS').toUpperCase();
                 const sign = match[3] === '-' ? -1 : 1;
                 const lag = match[4] ? parseInt(match[4], 10) * sign : 0;
 
-                const targetTask = wbsMap.get(targetRef);
+                const targetTask = wbsMap.get(targetRef) || idMap.get(targetRef) || positionMap.get(targetRef);
                 if (targetTask) {
                     results.push({
                         targetTask,
@@ -141,66 +124,155 @@ export class DependencyEngine {
         if (!tasks || tasks.length === 0) return;
 
         this.updateWBSHierarchy(tasks, calendar);
+        this.calculateForecast(tasks, calendar);
+        this.calculateCriticalPath(tasks, calendar);
+    }
 
-        const leafTasks = tasks.filter(t => !t.isSummary);
+    /** Calculate projected dates and overdue state without changing the selected baseline. */
+    static calculateForecast(tasks, calendar) {
+        const today = this.getLocalToday();
+        const leaves = tasks.filter(task => !task.isSummary);
+        const isComplete = task => task.status === 'Complete';
+
+        leaves.forEach(task => {
+            const plannedStart = task.plannedStart || task.start;
+            const plannedFinish = task.plannedFinish || task.finish;
+            const completed = isComplete(task);
+            const overdue = !completed && plannedFinish && plannedFinish < today;
+            const duration = Math.max(0, Number(task.projectedDuration ?? task.duration) || 0);
+            task.isOverdue = Boolean(overdue);
+            task.overdueDays = overdue
+                ? Math.max(1, Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${plannedFinish}T00:00:00Z`)) / 86400000))
+                : 0;
+            task._projectionBaseStart = completed
+                ? (task.actualStart || plannedStart || today)
+                : (task.actualStart || task.projectedStartConstraint || plannedStart || today);
+            // Progress is only a visual indicator; forecasts always use the scheduled duration.
+            task._projectionDuration = duration;
+
+            if (completed) {
+                task.projectedStart = task.actualStart || plannedStart;
+                task.projectedFinish = task.actualFinish || plannedFinish;
+                task.forecastStart = task.projectedStart;
+                task.forecastFinish = task.projectedFinish;
+            }
+        });
+
+        const rollup = () => {
+            tasks.filter(task => task.isSummary)
+                .sort((a, b) => b.wbs.split('.').length - a.wbs.split('.').length)
+                .forEach(parent => {
+                    const children = tasks.filter(task => task.parentId === parent.id);
+                    const starts = children.map(task => task.projectedStart).filter(Boolean).sort();
+                    const finishes = children.map(task => task.projectedFinish).filter(Boolean).sort();
+                    if (starts.length) parent.projectedStart = starts[0];
+                    if (finishes.length) parent.projectedFinish = finishes[finishes.length - 1];
+                    parent.forecastStart = parent.projectedStart;
+                    parent.forecastFinish = parent.projectedFinish;
+                    parent.isOverdue = children.some(task => task.isOverdue);
+                    parent.overdueDays = children.reduce((max, task) => Math.max(max, task.overdueDays || 0), 0);
+                });
+        };
+
+        // Reset from stable inputs each time; dependency changes cannot drift between recalculations.
+        leaves.forEach(task => {
+            const completed = isComplete(task);
+            if (completed) return;
+            let start = CalendarEngine.nextWorkingDay(task._projectionBaseStart, calendar);
+            if (!completed && task.isOverdue && today > start) start = CalendarEngine.nextWorkingDay(today, calendar);
+            if (!completed && task.delayDays !== 0) start = CalendarEngine.shiftWorkingDays(start, task.delayDays, calendar);
+            task.projectedStart = start;
+            task.projectedFinish = task._projectionDuration > 0
+                ? CalendarEngine.addWorkingDays(start, task._projectionDuration, calendar)
+                : start;
+            task.forecastStart = task.projectedStart;
+            task.forecastFinish = task.projectedFinish;
+        });
+        rollup();
+
         let changed = true;
         let iterations = 0;
-        const maxIterations = tasks.length + 2;
-
-        while (changed && iterations < maxIterations) {
+        while (changed && iterations++ < tasks.length + 2) {
             changed = false;
-            iterations++;
+            leaves.forEach(task => {
+                if (isComplete(task)) return;
+                const duration = task._projectionDuration;
+                const spanBack = Math.max(0, duration - 1);
+                const completed = isComplete(task);
+                let baseStart = CalendarEngine.nextWorkingDay(task._projectionBaseStart, calendar);
+                let dependencyStart = '';
+                const links = this.parsePredecessors(task.predecessors, tasks)
+                    .filter(link => link.targetTask && link.targetTask !== task);
 
-            leafTasks.forEach(task => {
-                const preds = this.parsePredecessors(task.predecessors, tasks);
-                const spanBack = Math.max(1, task.duration || 0) - 1;
-                const validPreds = preds.filter(p => p.targetTask && p.targetTask !== task && p.targetTask.start && p.targetTask.finish);
+                links.forEach(link => {
+                    const pred = link.targetTask;
+                    const predComplete = isComplete(pred);
+                    const predStart = predComplete && pred.actualStart ? pred.actualStart : pred.projectedStart;
+                    const predFinish = predComplete && pred.actualFinish ? pred.actualFinish : pred.projectedFinish;
+                    if (!predStart || !predFinish) return;
 
-                // Tasks with predecessors are fully driven by them; others keep their manual start
-                let earliestStart = null;
-
-                validPreds.forEach(pred => {
-                    const predTask = pred.targetTask;
-                    let requiredDate;
-
-                    switch (pred.type) {
+                    let candidate;
+                    switch (link.type) {
                         case 'SS':
-                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar);
+                            candidate = CalendarEngine.shiftWorkingDays(predStart, link.lag, calendar);
                             break;
-                        case 'FF':
-                            requiredDate = CalendarEngine.shiftWorkingDays(
-                                CalendarEngine.shiftWorkingDays(predTask.finish, pred.lag, calendar), -spanBack, calendar);
+                        case 'FF': {
+                            const requiredFinish = CalendarEngine.shiftWorkingDays(predFinish, link.lag, calendar);
+                            candidate = duration > 0 ? CalendarEngine.shiftWorkingDays(requiredFinish, -spanBack, calendar) : requiredFinish;
                             break;
-                        case 'SF':
-                            requiredDate = CalendarEngine.shiftWorkingDays(
-                                CalendarEngine.shiftWorkingDays(predTask.start, pred.lag, calendar), -spanBack, calendar);
+                        }
+                        case 'SF': {
+                            const requiredFinish = CalendarEngine.shiftWorkingDays(predStart, link.lag, calendar);
+                            candidate = duration > 0 ? CalendarEngine.shiftWorkingDays(requiredFinish, -spanBack, calendar) : requiredFinish;
                             break;
-                        default: // FS: next working day after predecessor finish, plus lag in working days
-                            requiredDate = CalendarEngine.shiftWorkingDays(predTask.finish, 1 + pred.lag, calendar);
+                        }
+                        default:
+                            candidate = CalendarEngine.shiftWorkingDays(predFinish, 1 + link.lag, calendar);
                     }
-
-                    if (!earliestStart || requiredDate > earliestStart) {
-                        earliestStart = requiredDate;
-                    }
+                    if (!dependencyStart || candidate > dependencyStart) dependencyStart = candidate;
                 });
 
-                const calculatedStart = CalendarEngine.nextWorkingDay(earliestStart || task.start, calendar);
-                const calculatedFinish = task.duration > 0
-                    ? this.addWorkingDays(calculatedStart, task.duration, calendar)
-                    : calculatedStart;
+                if (!completed && task.isOverdue && today > baseStart) baseStart = CalendarEngine.nextWorkingDay(today, calendar);
 
-                if (task.start !== calculatedStart || task.finish !== calculatedFinish) {
-                    task.start = calculatedStart;
-                    task.finish = calculatedFinish;
-                    changed = true;
+                let start;
+                if (task.delayDays < 0) {
+                    const advancedStart = CalendarEngine.shiftWorkingDays(baseStart, task.delayDays, calendar);
+                    start = dependencyStart && dependencyStart > advancedStart
+                        ? CalendarEngine.nextWorkingDay(dependencyStart, calendar)
+                        : CalendarEngine.nextWorkingDay(advancedStart, calendar);
+                } else {
+                    const earliestStart = dependencyStart && dependencyStart > baseStart ? dependencyStart : baseStart;
+                    start = task.delayDays > 0
+                        ? CalendarEngine.shiftWorkingDays(earliestStart, task.delayDays, calendar)
+                        : CalendarEngine.nextWorkingDay(earliestStart, calendar);
                 }
-            });
+                let finish = duration > 0 ? CalendarEngine.addWorkingDays(start, duration, calendar) : start;
 
-            // Summary dates must be current when summaries act as predecessors
-            this.updateWBSHierarchy(tasks, calendar);
+                // Keep the baseline finish as a lower bound unless the user explicitly adjusted the projection.
+                const hasProjectionOverride = Boolean(task.projectedStartConstraint) || task.projectedDuration !== task.duration;
+                const baselineFinish = task.plannedFinish || task.finish;
+                if (!completed && !task.isOverdue && !hasProjectionOverride && task.delayDays === 0 && baselineFinish && finish < baselineFinish) {
+                    finish = baselineFinish;
+                }
+
+                if (start !== task.projectedStart || finish !== task.projectedFinish) changed = true;
+                task.projectedStart = start;
+                task.projectedFinish = finish;
+                task.forecastStart = start;
+                task.forecastFinish = finish;
+            });
+            rollup();
         }
 
-        this.calculateCriticalPath(tasks, calendar);
+        leaves.forEach(task => {
+            delete task._projectionBaseStart;
+            delete task._projectionDuration;
+        });
+    }
+
+    static getLocalToday() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     }
 
     /**
@@ -209,13 +281,13 @@ export class DependencyEngine {
     static calculateCriticalPath(tasks, calendar = new ProjectCalendar()) {
         if (!tasks || tasks.length === 0) return;
 
-        const leafTasks = tasks.filter(t => !t.isSummary && t.start && t.finish);
+        const leafTasks = tasks.filter(t => !t.isSummary && t.projectedStart && t.projectedFinish);
         if (leafTasks.length === 0) return;
 
         let maxProjectFinish = null;
         leafTasks.forEach(t => {
-            if (!maxProjectFinish || t.finish > maxProjectFinish) {
-                maxProjectFinish = t.finish;
+            if (!maxProjectFinish || t.projectedFinish > maxProjectFinish) {
+                maxProjectFinish = t.projectedFinish;
             }
         });
 
@@ -240,7 +312,7 @@ export class DependencyEngine {
 
             leafTasks.forEach(task => {
                 const preds = this.parsePredecessors(task.predecessors, tasks);
-                const validPreds = preds.filter(p => p.targetTask && !p.targetTask.isSummary && p.targetTask.start && p.targetTask.finish);
+                const validPreds = preds.filter(p => p.targetTask && !p.targetTask.isSummary && p.targetTask.projectedStart && p.targetTask.projectedFinish);
 
                 validPreds.forEach(pred => {
                     const pTask = pred.targetTask;
@@ -289,12 +361,12 @@ export class DependencyEngine {
 
         // Determine critical status and total float/slack
         leafTasks.forEach(t => {
-            if (t.lateStart && t.start) {
-                if (t.lateStart <= t.start) {
+            if (t.lateStart && t.projectedStart) {
+                if (t.lateStart <= t.projectedStart) {
                     t.slack = 0;
                     t.isCritical = true;
                 } else {
-                    t.slack = CalendarEngine.getWorkingDays(t.start, t.lateStart, calendar) - 1;
+                    t.slack = CalendarEngine.getWorkingDays(t.projectedStart, t.lateStart, calendar) - 1;
                     t.isCritical = t.slack <= 0;
                 }
             } else {

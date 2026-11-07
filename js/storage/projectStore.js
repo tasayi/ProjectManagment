@@ -22,7 +22,7 @@ export class ProjectStore {
         return {
             appName: 'Project Management Tool',
             fileFormat: 'hardware_pm_prj',
-            version: '1.2',
+            version: '1.3',
             exportedAt: new Date().toISOString(),
             project: {
                 title: projectTitle || 'Project Management Schedule',
@@ -40,7 +40,7 @@ export class ProjectStore {
     static saveToLocalStorage(projectTitle, tasks, resources, calendar) {
         try {
             const payload = {
-                version: '1.2',
+                version: '1.3',
                 title: projectTitle || 'Project Management Schedule',
                 updatedAt: new Date().toISOString(),
                 tasks: tasks,
@@ -231,7 +231,7 @@ export class ProjectStore {
      * Generate a new blank project structure
      */
     static getBlankProject() {
-        const today = new Date().toISOString().split('T')[0];
+        const today = DependencyEngine.getLocalToday();
         const calendar = new ProjectCalendar();
         const resources = DEFAULT_RESOURCES;
 
@@ -265,7 +265,7 @@ export class ProjectStore {
             return this.getBlankProject();
         }
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = DependencyEngine.getLocalToday();
         const calendar = new ProjectCalendar();
         const resources = DEFAULT_RESOURCES;
         let tasks = [];

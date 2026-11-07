@@ -25,8 +25,12 @@ export class ExcelExporter {
             'Assigned Engineers': t.getFormattedAssignments(),
             'Status': t.status,
             'Duration (Days)': t.duration,
-            'Start Date': CalendarEngine.formatDate(t.start),
-            'Finish Date': CalendarEngine.formatDate(t.finish),
+            'Baseline Start': CalendarEngine.formatDate(t.start),
+            'Baseline Finish': CalendarEngine.formatDate(t.finish),
+            'Projected Start': CalendarEngine.formatDate(t.projectedStart),
+            'Projected Finish': CalendarEngine.formatDate(t.projectedFinish),
+            'Actual Start': CalendarEngine.formatDate(t.actualStart),
+            'Actual Finish': CalendarEngine.formatDate(t.actualFinish),
             'Predecessors': t.predecessors || '',
             'Procurement Lead (Days)': t.leadTime || 0,
             'Vendor': t.vendor || '',
@@ -89,8 +93,8 @@ export class ExcelExporter {
                 const row = {
                     'WBS': t.wbs,
                     'Activity Name': t.name,
-                    'Current Start': CalendarEngine.formatDate(t.start),
-                    'Current Finish': CalendarEngine.formatDate(t.finish),
+                    'Current Start': CalendarEngine.formatDate(BaselineEngine.getCurrentStart(t)),
+                    'Current Finish': CalendarEngine.formatDate(BaselineEngine.getCurrentFinish(t)),
                     'Progress (%)': t.progress || 0,
                     'Status': t.status
                 };
@@ -99,7 +103,7 @@ export class ExcelExporter {
                     row[`${b.label} Start`] = snap ? CalendarEngine.formatDate(snap.start) : '';
                     row[`${b.label} Finish`] = snap ? CalendarEngine.formatDate(snap.finish) : '';
                     row[`${b.label} Finish Var (d)`] = snap
-                        ? Math.round((new Date(t.finish) - new Date(snap.finish)) / 86400000) : '';
+                        ? Math.round((new Date(BaselineEngine.getCurrentFinish(t)) - new Date(snap.finish)) / 86400000) : '';
                 });
                 return row;
             });
@@ -112,7 +116,7 @@ export class ExcelExporter {
     }
 
     static exportToCSV(projectTitle, tasks) {
-        const headers = ['WBS', 'Activity Name', 'Workstream', 'Stage', 'Assigned Engineer', 'Status', 'Duration', 'Start', 'Finish', 'Predecessors', 'LeadTime', 'Progress'];
+        const headers = ['WBS', 'Activity Name', 'Workstream', 'Stage', 'Assigned Engineer', 'Status', 'Duration', 'Baseline Start', 'Baseline Finish', 'Projected Start', 'Projected Finish', 'Actual Start', 'Actual Finish', 'Predecessors', 'LeadTime', 'Progress'];
         const rows = tasks.map(t => [
             `"${t.wbs}"`,
             `"${t.name.replace(/"/g, '""')}"`,
@@ -123,6 +127,10 @@ export class ExcelExporter {
             t.duration,
             `"${CalendarEngine.formatDate(t.start)}"`,
             `"${CalendarEngine.formatDate(t.finish)}"`,
+            `"${CalendarEngine.formatDate(t.projectedStart)}"`,
+            `"${CalendarEngine.formatDate(t.projectedFinish)}"`,
+            `"${CalendarEngine.formatDate(t.actualStart)}"`,
+            `"${CalendarEngine.formatDate(t.actualFinish)}"`,
             `"${(t.predecessors || '').replace(/"/g, '""')}"`,
             t.leadTime || 0,
             t.progress || 0

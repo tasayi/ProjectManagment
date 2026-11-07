@@ -13,16 +13,27 @@ export class BaselineEngine {
         const date = new Date().toISOString();
 
         tasks.forEach(t => {
+            const completed = t.status === 'Complete';
+            const baselineStart = completed
+                ? (t.actualStart || t.projectedStart || t.forecastStart || t.start)
+                : (t.projectedStart || t.forecastStart || t.start);
+            const baselineFinish = completed
+                ? (t.actualFinish || t.projectedFinish || t.forecastFinish || t.finish)
+                : (t.projectedFinish || t.forecastFinish || t.finish);
             const snap = {
                 id, label: name, date,
-                start: t.start,
-                finish: t.finish,
-                duration: t.duration,
+                start: baselineStart,
+                finish: baselineFinish,
+                duration: t.projectedDuration ?? t.duration,
                 progress: t.progress || 0,
                 status: t.status
             };
             t.baselines = [...(t.baselines || []), snap];
             t.baseline = snap;
+            t.plannedStart = snap.start;
+            t.plannedFinish = snap.finish;
+            t.start = snap.start;
+            t.finish = snap.finish;
         });
         return tasks.length;
     }
@@ -51,6 +62,8 @@ export class BaselineEngine {
             t.baseline = id === null || id === undefined
                 ? null
                 : (t.baselines || []).find(b => b.id === id) || null;
+            t.start = t.baseline?.start || t.plannedStart || t.start;
+            t.finish = t.baseline?.finish || t.plannedFinish || t.finish;
         });
     }
 
@@ -63,7 +76,7 @@ export class BaselineEngine {
             label: b.label,
             start: b.start,
             finish: b.finish,
-            finishVarianceDays: Math.round((new Date(task.finish) - new Date(b.finish)) / 86400000)
+            finishVarianceDays: Math.round((new Date(this.getCurrentFinish(task)) - new Date(b.finish)) / 86400000)
         }));
     }
 
@@ -74,7 +87,19 @@ export class BaselineEngine {
         tasks.forEach(t => {
             t.baseline = null;
             t.baselines = [];
+            t.start = t.plannedStart || t.start;
+            t.finish = t.plannedFinish || t.finish;
         });
+    }
+
+    static getCurrentStart(task) {
+        const complete = task.status === 'Complete';
+        return complete ? (task.actualStart || task.projectedStart || task.start) : (task.projectedStart || task.start);
+    }
+
+    static getCurrentFinish(task) {
+        const complete = task.status === 'Complete';
+        return complete ? (task.actualFinish || task.projectedFinish || task.finish) : (task.projectedFinish || task.finish);
     }
 
     /**
@@ -94,8 +119,8 @@ export class BaselineEngine {
 
         const baselineStart = new Date(task.baseline.start);
         const baselineFinish = new Date(task.baseline.finish);
-        const currentStart = new Date(task.start);
-        const currentFinish = new Date(task.finish);
+        const currentStart = new Date(this.getCurrentStart(task));
+        const currentFinish = new Date(this.getCurrentFinish(task));
 
         const startVarianceDays = Math.round((currentStart - baselineStart) / (1000 * 60 * 60 * 24));
         const finishVarianceDays = Math.round((currentFinish - baselineFinish) / (1000 * 60 * 60 * 24));

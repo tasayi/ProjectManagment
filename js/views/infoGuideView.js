@@ -92,7 +92,7 @@ export class InfoGuideView {
                                     Task Management & WBS Hierarchy
                                 </h4>
                                 <p class="text-slate-600 leading-relaxed">
-                                    Click <strong>Add Activity</strong> to create tasks. Select a row and click <strong>Indent</strong> to turn a task into a child subtask underneath a parent <strong>Summary Task</strong>. Tasks with <code>0</code> duration automatically render as <strong>Milestone Diamonds</strong>.
+                                    Click <strong>Add Activity</strong> to create tasks. Select a row and click <strong>Indent</strong> to turn a task into a child subtask underneath a parent <strong>Summary Task</strong>. Tasks with <code>0</code> duration automatically render as <strong>Milestone Diamonds</strong>. Use the <strong>Notes</strong> toolbar action to add notes; saved notes show an icon beside the WBS number.
                                 </p>
                             </div>
 
@@ -114,7 +114,7 @@ export class InfoGuideView {
                                     Bidirectional Gantt Chart Drag & Drop
                                 </h4>
                                 <p class="text-slate-600 leading-relaxed">
-                                    Drag the body of any Gantt task bar left or right to translate start/finish dates. Drag the right edge handle to extend duration. Edits instantly sync with the WBS Grid table.
+                                    <strong>Baseline Start/Finish</strong> stay fixed while <strong>Projected Start/Finish</strong> recalculate from predecessor dates. Enter actual dates separately as work happens. Signed <strong>Delay (d)</strong> values push dates later (+) or earlier (−) and update dependent forecasts. Percentage complete only colors the bar fill; it does not change dates or duration. Only Status <strong>Complete</strong> selects actual dates.
                                 </p>
                             </div>
 

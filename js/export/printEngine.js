@@ -104,6 +104,10 @@ export class PrintEngine {
                 <td style="${td}text-align:center;">${t.duration}</td>
                 <td style="${td}white-space:nowrap;">${fmt(t.start)}</td>
                 <td style="${td}white-space:nowrap;">${fmt(t.finish)}</td>
+                <td style="${td}white-space:nowrap;">${fmt(t.projectedStart)}</td>
+                <td style="${td}white-space:nowrap;">${fmt(t.projectedFinish)}</td>
+                <td style="${td}white-space:nowrap;">${fmt(t.actualStart)}</td>
+                <td style="${td}white-space:nowrap;">${fmt(t.actualFinish)}</td>
                 <td style="${td}">${this.esc(t.predecessors || '')}</td>
                 <td style="${td}">${v.hasBaseline ? this.esc(v.statusText) : ''}</td>
             </tr>`;
@@ -111,7 +115,7 @@ export class PrintEngine {
 
         return `<table style="width:100%;border-collapse:collapse;">
             <thead style="display:table-header-group;"><tr>
-                ${['WBS', 'Activity', 'Stream', 'Stage', 'Assigned', 'Status', 'Done', 'Dur (d)', 'Start', 'Finish', 'Predecessors', 'Variance']
+                ${['WBS', 'Activity', 'Stream', 'Stage', 'Assigned', 'Status', 'Done', 'Dur (d)', 'Baseline Start', 'Baseline Finish', 'Projected Start', 'Projected Finish', 'Actual Start', 'Actual Finish', 'Predecessors', 'Variance']
                     .map(h => `<th style="${th}">${h}</th>`).join('')}
             </tr></thead>
             <tbody>${rows}</tbody>
